@@ -16,7 +16,7 @@ jobs:
     - name: Checkout target repo
       uses: actions/checkout@v7
       with:
-        filter:'.github/workflows'
+        filter: '.github/workflows'
         token: ${{ secrets.GITHUB_TOKEN }} # 使用你刚才设置的 Secret
     
     # 第二步：运行同步 Action
