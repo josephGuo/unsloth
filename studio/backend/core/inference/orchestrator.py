@@ -79,6 +79,12 @@ class InferenceOrchestrator:
         self._mailbox_lock = threading.Lock()
         self._dispatcher_thread: Optional[threading.Thread] = None
         self._dispatcher_stop = threading.Event()
+        # Serializes dispatcher start/stop. _generate_dispatched (compare mode) bypasses
+        # _gen_lock, so two concurrent compare requests can both reach _start_dispatcher;
+        # without this lock both could observe no live dispatcher and each spawn one,
+        # orphaning the extra thread (self._dispatcher_thread tracks only the last). The
+        # orphan later steals the "unloaded" reply off resp_queue and hangs unload_model.
+        self._dispatcher_lifecycle_lock = threading.Lock()
 
         # Local state mirrors (updated from subprocess responses)
         self.active_model_name: Optional[str] = None
@@ -422,6 +428,7 @@ class InferenceOrchestrator:
         enable_thinking: Optional[bool] = None,
         reasoning_effort: Optional[str] = None,
         preserve_thinking: Optional[bool] = None,
+        presence_penalty: float = 0.0,
     ) -> dict:
         """Build the 'generate' command shared by the locked and dispatched paths."""
         cmd = {
@@ -436,6 +443,7 @@ class InferenceOrchestrator:
             "min_p": min_p,
             "max_new_tokens": max_new_tokens,
             "repetition_penalty": repetition_penalty,
+            "presence_penalty": presence_penalty,
         }
         # Only forward template kwargs the caller set, for older worker compat.
         if use_adapter is not None:
@@ -514,33 +522,56 @@ class InferenceOrchestrator:
     # Dispatcher — per-request mailbox routing for compare mode
     # ------------------------------------------------------------------
 
-    def _start_dispatcher(self) -> None:
+    def _start_dispatcher(self) -> bool:
         """Start the dispatcher thread if not already running.
 
         The dispatcher reads the shared resp_queue and routes responses to
         per-request mailbox queues, letting multiple adapter-controlled
         (compare) requests be in-flight without holding _gen_lock.
-        """
-        if self._dispatcher_thread is not None and self._dispatcher_thread.is_alive():
-            return
 
-        self._dispatcher_stop.clear()
-        self._dispatcher_thread = threading.Thread(
-            target = self._dispatcher_loop,
-            daemon = True,
-            name = "inference-dispatcher",
-        )
-        self._dispatcher_thread.start()
-        logger.debug("Dispatcher thread started")
+        The whole check-then-spawn runs under _dispatcher_lifecycle_lock so
+        concurrent compare requests (which bypass _gen_lock) can't both observe
+        no live dispatcher and each spawn one. Returns True only for the caller
+        that actually started a new thread; False if one was already alive.
+        """
+        with self._dispatcher_lifecycle_lock:
+            # Refuse to start while an unload is in progress. unload_model sets
+            # _unload_pending under this same lock before it stops the idle
+            # dispatcher, so a start queued behind that stop observes the unload
+            # here and bails. Without this a fresh dispatcher would be spawned
+            # after the stop, become the resp_queue reader, and consume the
+            # worker's "unloaded" reply (unroutable, so dropped) before
+            # unload_model's _wait_response sees it -- hanging the unload 300s.
+            if self._unload_pending:
+                return False
+            if self._dispatcher_thread is not None and self._dispatcher_thread.is_alive():
+                return False
+
+            self._dispatcher_stop.clear()
+            self._dispatcher_thread = threading.Thread(
+                target = self._dispatcher_loop,
+                daemon = True,
+                name = "inference-dispatcher",
+            )
+            self._dispatcher_thread.start()
+            logger.debug("Dispatcher thread started")
+            return True
 
     def _stop_dispatcher(self) -> None:
-        """Signal the dispatcher to stop and wait for it."""
-        if self._dispatcher_thread is None:
-            return
-        self._dispatcher_stop.set()
-        self._dispatcher_thread.join(timeout = _DISPATCH_STOP_TIMEOUT)
-        self._dispatcher_thread = None
-        logger.debug("Dispatcher thread stopped")
+        """Signal the dispatcher to stop and wait for it.
+
+        Runs under _dispatcher_lifecycle_lock (paired with _start_dispatcher) so
+        a stop can't interleave with a concurrent start. Callers must NOT hold
+        _mailbox_lock here: this joins the dispatcher, and the dispatcher loop
+        takes _mailbox_lock, so holding it would deadlock the join.
+        """
+        with self._dispatcher_lifecycle_lock:
+            if self._dispatcher_thread is None:
+                return
+            self._dispatcher_stop.set()
+            self._dispatcher_thread.join(timeout = _DISPATCH_STOP_TIMEOUT)
+            self._dispatcher_thread = None
+            logger.debug("Dispatcher thread stopped")
 
     def _dispatcher_loop(self) -> None:
         """Background loop: read resp_queue → route to mailboxes by request_id."""
@@ -602,6 +633,7 @@ class InferenceOrchestrator:
         reasoning_effort: Optional[str] = None,
         preserve_thinking: Optional[bool] = None,
         stats_holder: Optional[dict] = None,
+        presence_penalty: float = 0.0,
     ) -> Generator[str, None, None]:
         """Dispatched generation — sends command without holding _gen_lock.
 
@@ -628,13 +660,14 @@ class InferenceOrchestrator:
             yield "Error: model is being unloaded"
             return
 
-        # Ensure the dispatcher runs. Track whether it was already running: if this call
-        # starts it and then bails on a racing unload, it must stop it again (see the
-        # unloading bail below).
-        dispatcher_preexisting = (
-            self._dispatcher_thread is not None and self._dispatcher_thread.is_alive()
-        )
-        self._start_dispatcher()
+        # Ensure the dispatcher runs. _start_dispatcher serializes concurrent starters under
+        # _dispatcher_lifecycle_lock and returns True only for the caller that actually spawned
+        # the thread, so at most one dispatcher ever exists even when two compare requests race
+        # here. Derive dispatcher_preexisting from that atomic result (not a separate unlocked
+        # is_alive() read): if THIS call started the dispatcher and then bails on a racing
+        # unload, it must stop it again (see the unloading bail below).
+        started = self._start_dispatcher()
+        dispatcher_preexisting = not started
 
         request_id = str(uuid.uuid4())
 
@@ -654,6 +687,7 @@ class InferenceOrchestrator:
             min_p = min_p,
             max_new_tokens = max_new_tokens,
             repetition_penalty = repetition_penalty,
+            presence_penalty = presence_penalty,
             use_adapter = use_adapter,
             tools = tools,
             enable_thinking = enable_thinking,
@@ -1041,7 +1075,15 @@ class InferenceOrchestrator:
         # The subprocess runs commands sequentially, so a bare unload queues behind a
         # running generate (a 2-3 min hang). Cancel first (via the mp.Event the worker
         # polls each token), then take _gen_lock as sole resp_queue reader (like GGUF).
-        self._unload_pending = True
+        #
+        # Set _unload_pending under _dispatcher_lifecycle_lock so it is ordered ahead of
+        # the dispatcher stop that _wait_dispatcher_idle runs under the same lock: a
+        # compare request's _start_dispatcher queued behind that stop then observes the
+        # unload and refuses to spawn a fresh dispatcher that would eat the "unloaded"
+        # reply off resp_queue. This is a standalone acquisition (no _gen_lock held yet),
+        # so it keeps the _gen_lock -> _dispatcher_lifecycle_lock order and can't deadlock.
+        with self._dispatcher_lifecycle_lock:
+            self._unload_pending = True
         # Cancelling only the running generation isn't enough: the worker clears
         # cancel_event at each generate start, so a queued one would clear it and run the
         # outgoing model to completion. drain_event, never cleared, makes any generate
@@ -1128,6 +1170,7 @@ class InferenceOrchestrator:
         reasoning_effort: Optional[str] = None,
         preserve_thinking: Optional[bool] = None,
         stats_holder: Optional[dict] = None,
+        presence_penalty: float = 0.0,
     ) -> Generator[str, None, None]:
         """Generate response, streaming tokens from subprocess.
 
@@ -1137,6 +1180,8 @@ class InferenceOrchestrator:
 
         ``stats_holder``: caller-owned dict; on gen_done its "stats" key gets
         the worker's usage/timings. Request-scoped to avoid cross-stream reads.
+
+        ``presence_penalty`` matches the GGUF sampling path (0 disables it).
         """
         yield from self._generate_inner(
             messages = messages,
@@ -1155,6 +1200,7 @@ class InferenceOrchestrator:
             reasoning_effort = reasoning_effort,
             preserve_thinking = preserve_thinking,
             stats_holder = stats_holder,
+            presence_penalty = presence_penalty,
         )
 
     def generate_chat_completion_with_tools(
@@ -1182,6 +1228,7 @@ class InferenceOrchestrator:
         bypass_permissions: bool = False,
         use_adapter: Optional[Union[bool, str]] = None,
         stats_holder: Optional[dict] = None,
+        presence_penalty: float = 0.0,
         **_unused,
     ):
         """Run the safetensors agentic tool loop in the parent process,
@@ -1217,6 +1264,7 @@ class InferenceOrchestrator:
                 preserve_thinking = preserve_thinking,
                 # last turn wins, like the GGUF tool loop
                 stats_holder = stats_holder,
+                presence_penalty = presence_penalty,
             )
             if use_adapter is not None:
                 yield from self.generate_with_adapter_control(
@@ -1284,6 +1332,7 @@ class InferenceOrchestrator:
         reasoning_effort: Optional[str] = None,
         preserve_thinking: Optional[bool] = None,
         stats_holder: Optional[dict] = None,
+        presence_penalty: float = 0.0,
     ) -> Generator[str, None, None]:
         """Inner generation logic — sends command to subprocess, yields tokens.
 
@@ -1327,6 +1376,7 @@ class InferenceOrchestrator:
                 min_p = min_p,
                 max_new_tokens = max_new_tokens,
                 repetition_penalty = repetition_penalty,
+                presence_penalty = presence_penalty,
                 use_adapter = use_adapter,
                 tools = tools,
                 enable_thinking = enable_thinking,
