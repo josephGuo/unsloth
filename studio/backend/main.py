@@ -313,7 +313,6 @@ from hub.routes import (
     inventory_router as hub_inventory_router,
     datasets_router as hub_datasets_router,
 )
-from picker.routes import templates_router as picker_templates_router
 from hub.schemas.downloads import TransportCapabilities
 from hub.utils.download_registry import (
     get_download_transport_capabilities,
@@ -613,6 +612,22 @@ app = FastAPI(
     lifespan = lifespan,
 )
 
+# The MCP surface is opt-in because it can start GPU jobs and write model
+# artifacts. Mount it only when explicitly enabled by the Studio process.
+if os.environ.get("UNSLOTH_STUDIO_ENABLE_MCP") == "1":
+    from fastmcp.utilities.lifespan import combine_lifespans
+
+    from mcp_server import BearerTokenMiddleware, create_studio_mcp
+
+    _studio_mcp_app = create_studio_mcp().http_app(path = "/")
+    _studio_mcp_lifespan = _studio_mcp_app.lifespan
+    _mcp_token = os.environ.get("UNSLOTH_STUDIO_MCP_TOKEN")
+    if not _mcp_token:
+        raise RuntimeError("UNSLOTH_STUDIO_MCP_TOKEN is required when MCP is enabled")
+    _studio_mcp_app = BearerTokenMiddleware(_studio_mcp_app, _mcp_token)
+    app.router.lifespan_context = combine_lifespans(lifespan, _studio_mcp_lifespan)
+    app.mount("/mcp", _studio_mcp_app)
+
 from loggers.config import LogConfig
 from loggers.handlers import LoggingMiddleware
 
@@ -746,7 +761,6 @@ _BODY_PROTECTED_PREFIXES = (
     "/v1/completions",
     "/p/",
     "/api/inference",
-    "/api/picker",
     "/api/data-recipe",
     "/api/datasets",
     "/api/hub",
@@ -754,6 +768,7 @@ _BODY_PROTECTED_PREFIXES = (
     "/api/settings",
     "/api/train",
     "/api/export",
+    "/mcp",
 )
 _DATASET_UPLOAD_PASSTHROUGH_PREFIX = "/api/datasets/upload"
 _DATA_RECIPE_UNSTRUCTURED_UPLOAD_PASSTHROUGH_PREFIX = (
@@ -977,7 +992,6 @@ app.include_router(rag_router, prefix = "/api/rag", tags = ["rag"])
 app.include_router(training_history_router, prefix = "/api/train", tags = ["training-history"])
 app.include_router(hub_inventory_router, prefix = "/api/hub", tags = ["hub"])
 app.include_router(hub_datasets_router, prefix = "/api/hub/datasets", tags = ["hub"])
-app.include_router(picker_templates_router, prefix = "/api/picker", tags = ["picker"])
 
 # Re-wrap client-error responses on the /v1/* surface into OpenAI/Anthropic
 # error envelopes; non-/v1 paths keep FastAPI's default {"detail": ...} shape.
