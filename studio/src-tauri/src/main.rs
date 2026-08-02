@@ -5,8 +5,10 @@ mod commands;
 mod desktop_auth;
 mod desktop_backend_owner;
 mod desktop_update_policy;
+mod desktop_updater;
 mod diagnostics;
 mod install;
+mod loopback_http;
 mod native_backend_lease;
 mod native_clipboard;
 mod native_file_dialogs;
@@ -321,6 +323,7 @@ fn main() {
             desktop_auth::desktop_auth,
             desktop_update_policy::check_desktop_manual_update,
             desktop_update_policy::desktop_update_policy,
+            desktop_updater::check_desktop_update,
             diagnostics::collect_support_diagnostics,
             native_clipboard::read_native_clipboard_files,
             native_clipboard::read_native_clipboard_png,
