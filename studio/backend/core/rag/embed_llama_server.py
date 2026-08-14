@@ -271,9 +271,12 @@ class LlamaServerBackend:
 
     def _use_gpu(self) -> bool:
         """``RAG_EMBED_DEVICE``: ``gpu``/``cpu`` force it; ``auto`` uses a GPU when
-        present. A sticky CPU fallback (after an auto GPU start fails) wins."""
-        dev = config.EMBED_DEVICE.lower()
-        if dev == "gpu":
+        present. A sticky CPU fallback (after a GPU start we were allowed to give up
+        on) wins, so the reaper's next restart does not pay the startup timeout again
+        on a path already known not to start. Only the literal ``gpu`` outranks it,
+        and that spelling never sets the flag."""
+        dev = config.embed_device_preference()
+        if dev == "gpu" and not self._force_cpu:
             return True
         if dev == "cpu" or self._force_cpu:
             return False
@@ -282,10 +285,10 @@ class LlamaServerBackend:
     @staticmethod
     def _gpu_available() -> bool:
         """Apple Metal, or an NVIDIA/ROCm GPU with enough free VRAM. Reuses
-        llama_cpp's static probe (nvidia-smi first, so the common path needs no
-        torch). This backend IS llama-server, so it opts into the ROCm arch gate: an
-        uncovered device crashes the embedding server as it does a chat load
-        (#7624)."""
+        llama_cpp's static probe, which asks an smi tool before torch, so the
+        common path leaves no CUDA/HIP context behind. This backend IS
+        llama-server, so it opts into the ROCm arch gate: an uncovered device
+        crashes the embedding server as it does a chat load (#7624)."""
         from utils.hardware import is_apple_silicon
 
         if is_apple_silicon():
@@ -418,14 +421,13 @@ class LlamaServerBackend:
             pass
 
     def _spawn(self) -> None:
-        """Start the embed server (caller holds the lock). On ``auto``, a failed
-        GPU start falls back to CPU once; explicit ``gpu``/``cpu`` do not."""
+        """Start the embed server (caller holds the lock). A failed GPU start falls
+        back to CPU once, unless ``RAG_EMBED_DEVICE`` is the literal ``gpu``."""
         use_gpu = self._use_gpu()
         try:
             self._spawn_once(use_gpu)
         except RuntimeError:
-            auto = config.EMBED_DEVICE.lower() not in ("gpu", "cpu")
-            if use_gpu and auto:
+            if use_gpu and not config.embed_device_requires_gpu():
                 logger.warning("embed server GPU start failed; falling back to CPU")
                 self._force_cpu = True
                 self._spawn_once(False)
