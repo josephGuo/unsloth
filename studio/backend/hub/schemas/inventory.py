@@ -24,6 +24,14 @@ class GgufVariantDetail(BaseModel):
     )
     size_bytes: int = Field(0, description = "File size in bytes")
     download_size_bytes: int = Field(0, description = "Total bytes needed to download this variant")
+    download_remaining_bytes: Optional[int] = Field(
+        None,
+        description = (
+            "Bytes a resume still has to fetch: the total minus what is already on disk "
+            "and reusable. Set only on a partial variant; null when not partial or when "
+            "the plan cannot be resolved."
+        ),
+    )
     downloaded: bool = Field(
         False, description = "Whether this variant is already in the local HF cache"
     )
@@ -288,6 +296,10 @@ class ScanFolderInfo(BaseModel):
     id: int = Field(..., description = "Database row ID")
     path: str = Field(..., description = "Normalized absolute path")
     created_at: str = Field(..., description = "ISO 8601 creation timestamp")
+    status: str = Field(
+        default = "ok",
+        description = "Last scan result: ok, permission_denied, missing, or unreadable",
+    )
 
 
 class ScanFoldersResponse(BaseModel):
