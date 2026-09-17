@@ -14,6 +14,13 @@ from _playwright_robust import start_vite, stop_process, wait_for_smoke_page
 PAGE = "/smoke-prompt-queue-actions.html"
 ENTRY = "/smoke-prompt-queue-actions-main.tsx"
 
+# `wait_for_smoke_page` proves vite ANSWERS, by fetching the raw HTML. The first navigation
+# is what makes it WORK: vite transforms the page's whole module graph on demand, and the
+# default `wait_until = "load"` waits out every one of those requests, which on a cold
+# Windows runner runs past playwright's 30s default. The `wait_for` at the end of `seed`
+# already carries 60s for the same reason; this is the navigation ahead of it.
+NAV_TIMEOUT_MS = 90_000
+
 # The queue view must not fall back to English while Settings shows the
 # translated Queue/Steer wording from the same catalog.
 JA = {
@@ -25,8 +32,14 @@ JA = {
 }
 
 
-def seed(page, base, *, locale = "en", shortcut = "enter"):
-    page.goto(base + PAGE)
+def seed(
+    page,
+    base,
+    *,
+    locale = "en",
+    shortcut = "enter",
+):
+    page.goto(base + PAGE, wait_until = "domcontentloaded", timeout = NAV_TIMEOUT_MS)
     page.evaluate(
         """([locale, shortcut]) => {
             localStorage.setItem("unsloth_locale", locale);
@@ -37,7 +50,7 @@ def seed(page, base, *, locale = "en", shortcut = "enter"):
         }""",
         [locale, shortcut],
     )
-    page.reload()
+    page.reload(wait_until = "domcontentloaded", timeout = NAV_TIMEOUT_MS)
     page.get_by_role("button", name = "Reset fixture", exact = True).wait_for(
         state = "visible", timeout = 60_000
     )
@@ -109,7 +122,7 @@ def check_escape_during_ime(page, base):
     seed(page, base)
     editor = open_editor(page, "More options for queued prompt 1", "Edit message")
     editor.fill("draft-survives-ime-escape")
-    for init in ('{isComposing: true}', '{keyCode: 229}'):
+    for init in ("{isComposing: true}", "{keyCode: 229}"):
         page.evaluate(
             f"""() => {{
                 const ta = document.querySelector('textarea[aria-label^="Edit queued prompt"]');
@@ -155,9 +168,7 @@ def check_candidate_confirming_enter(page, base):
     )
     editor.press("Enter")
     expect(editor).to_have_count(0)
-    expect(page.locator("[data-queue-item-id]").first).to_contain_text(
-        "composition-in-progress"
-    )
+    expect(page.locator("[data-queue-item-id]").first).to_contain_text("composition-in-progress")
     print("PASS: a candidate-confirming Enter does not save the edit", flush = True)
 
 
@@ -182,9 +193,7 @@ def check_stuck_composition_recovers(page, base):
     page.wait_for_timeout(2800)
     editor.press("Enter")
     expect(editor).to_have_count(0)
-    expect(page.locator("[data-queue-item-id]").first).to_contain_text(
-        "recovers-after-timeout"
-    )
+    expect(page.locator("[data-queue-item-id]").first).to_contain_text("recovers-after-timeout")
 
     # Blur is the other reset point.
     editor = open_editor(page, "More options for queued prompt 2", "Edit message")
@@ -194,9 +203,7 @@ def check_stuck_composition_recovers(page, base):
     editor.focus()
     editor.press("Enter")
     expect(editor).to_have_count(0)
-    expect(page.locator("[data-queue-item-id]").nth(1)).to_contain_text(
-        "recovers-after-blur"
-    )
+    expect(page.locator("[data-queue-item-id]").nth(1)).to_contain_text("recovers-after-blur")
     print("PASS: a stuck composition recovers on timeout and on blur", flush = True)
 
 
