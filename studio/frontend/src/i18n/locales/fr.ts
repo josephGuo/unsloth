@@ -216,9 +216,6 @@ export const fr = {
       priority: "Priorité",
       lastUpdated: "Dernière mise à jour",
       manualOrder: "Ordre manuel",
-      priorityHint: "Actifs et non lus en premier",
-      lastUpdatedHint: "Les plus récents en premier",
-      manualOrderHint: "Faites glisser les lignes pour les réorganiser",
       switchedToManual: "Tri manuel : faites glisser les lignes pour les réorganiser",
       organizeChats: "Organiser les discussions",
       organizeProjects: "Organiser les projets",
@@ -907,6 +904,18 @@ export const fr = {
         revokeConfirmAction: "Révoquer tous les liens",
         revoked: "Tous les liens d'aperçu ont été révoqués",
         revokeError: "Impossible de révoquer les liens d'aperçu",
+      },
+      managedProviderUrls: {
+        sectionTitle: "Comptes gérés",
+        enableLabel: "Connexions locales et réseau",
+        enableDescription:
+          "Autorise les comptes gérés à pointer leurs connexions vers des adresses locales ou réseau, comme un serveur Ollama ou llama.cpp sur cet ordinateur ou sur votre réseau local. Désactivé par défaut, car cela permet à ces comptes d'atteindre les services exécutés sur votre ordinateur et sur votre réseau.",
+        lockedByEnvironment:
+          "Défini par UNSLOTH_STUDIO_BLOCK_PRIVATE_PROVIDER_URLS=1 sur ce serveur, qui refuse les adresses privées pour tous les comptes.",
+        loadError:
+          "Impossible de charger les paramètres de connexion des comptes gérés.",
+        saveError:
+          "Impossible d'enregistrer les paramètres de connexion des comptes gérés.",
       },
       notifications: {
         sectionTitle: "Notifications",

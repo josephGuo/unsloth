@@ -211,9 +211,6 @@ export const zhCN = {
       priority: "优先级",
       lastUpdated: "最近更新",
       manualOrder: "手动排序",
-      priorityHint: "进行中和未读优先",
-      lastUpdatedHint: "最新优先",
-      manualOrderHint: "拖动行即可重新排序",
       switchedToManual: "已改为手动排序，拖动行即可重新排序",
       organizeChats: "整理对话",
       organizeProjects: "整理项目",
@@ -871,6 +868,16 @@ export const zhCN = {
         revokeConfirmAction: "撤销所有链接",
         revoked: "所有预览链接已撤销",
         revokeError: "无法撤销预览链接",
+      },
+      managedProviderUrls: {
+        sectionTitle: "受管账户",
+        enableLabel: "本地和网络连接",
+        enableDescription:
+          "允许受管账户将连接指向本地或网络地址，例如本机或局域网中的 Ollama 或 llama.cpp 服务器。默认关闭，因为开启后这些账户可以访问在你的计算机和网络中运行的服务。",
+        lockedByEnvironment:
+          "由本服务器上的 UNSLOTH_STUDIO_BLOCK_PRIVATE_PROVIDER_URLS=1 决定，该设置会对所有账户拒绝私有地址。",
+        loadError: "无法加载受管账户的连接设置。",
+        saveError: "无法保存受管账户的连接设置。",
       },
       notifications: {
         sectionTitle: "通知",

@@ -216,9 +216,6 @@ export const de = {
       priority: "Priorität",
       lastUpdated: "Zuletzt aktualisiert",
       manualOrder: "Manuelle Reihenfolge",
-      priorityHint: "Aktive und ungelesene zuerst",
-      lastUpdatedHint: "Neueste zuerst",
-      manualOrderHint: "Zeilen zum Umordnen ziehen",
       switchedToManual: "Manuell sortiert: Zeilen zum Umordnen ziehen",
       organizeChats: "Chats organisieren",
       organizeProjects: "Projekte organisieren",
@@ -909,6 +906,18 @@ export const de = {
         revokeConfirmAction: "Alle Links widerrufen",
         revoked: "Alle Vorschaulinks widerrufen",
         revokeError: "Vorschaulinks konnten nicht widerrufen werden",
+      },
+      managedProviderUrls: {
+        sectionTitle: "Verwaltete Konten",
+        enableLabel: "Lokale und Netzwerkverbindungen",
+        enableDescription:
+          "Verwaltete Konten dürfen ihre Verbindungen auf lokale oder Netzwerkadressen richten, etwa einen Ollama- oder llama.cpp-Server auf diesem Computer oder in Ihrem LAN. Standardmäßig aus, denn damit erreichen diese Konten Dienste, die auf Ihrem Computer und in Ihrem Netzwerk laufen.",
+        lockedByEnvironment:
+          "Durch UNSLOTH_STUDIO_BLOCK_PRIVATE_PROVIDER_URLS=1 auf diesem Server festgelegt, das private Adressen für alle Konten ablehnt.",
+        loadError:
+          "Verbindungseinstellungen für verwaltete Konten konnten nicht geladen werden.",
+        saveError:
+          "Verbindungseinstellungen für verwaltete Konten konnten nicht gespeichert werden.",
       },
       notifications: {
         sectionTitle: "Benachrichtigungen",

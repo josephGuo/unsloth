@@ -215,9 +215,6 @@ export const es = {
       priority: "Prioridad",
       lastUpdated: "Última actualización",
       manualOrder: "Orden manual",
-      priorityHint: "Activos y no leídos primero",
-      lastUpdatedHint: "Más recientes primero",
-      manualOrderHint: "Arrastra las filas para reordenarlas",
       switchedToManual: "Orden manual: arrastra las filas para reordenarlas",
       organizeChats: "Organizar chats",
       organizeProjects: "Organizar proyectos",
@@ -905,6 +902,18 @@ export const es = {
         revokeConfirmAction: "Revocar todos los enlaces",
         revoked: "Todos los enlaces de vista previa revocados",
         revokeError: "No se pudieron revocar los enlaces de vista previa",
+      },
+      managedProviderUrls: {
+        sectionTitle: "Cuentas gestionadas",
+        enableLabel: "Conexiones locales y de red",
+        enableDescription:
+          "Permite que las cuentas gestionadas apunten sus conexiones a direcciones locales o de red, como un servidor Ollama o llama.cpp en este equipo o en tu red local. Desactivado de forma predeterminada, porque permite a esas cuentas alcanzar servicios que se ejecutan en tu equipo y en tu red.",
+        lockedByEnvironment:
+          "Definido por UNSLOTH_STUDIO_BLOCK_PRIVATE_PROVIDER_URLS=1 en este servidor, que rechaza las direcciones privadas para todas las cuentas.",
+        loadError:
+          "No se pudo cargar la configuración de conexiones de las cuentas gestionadas.",
+        saveError:
+          "No se pudo guardar la configuración de conexiones de las cuentas gestionadas.",
       },
       notifications: {
         sectionTitle: "Notificaciones",

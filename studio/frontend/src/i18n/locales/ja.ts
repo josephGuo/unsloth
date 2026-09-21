@@ -215,9 +215,6 @@ export const ja = {
       priority: "優先度",
       lastUpdated: "最終更新",
       manualOrder: "手動で並べ替え",
-      priorityHint: "実行中・未読が先頭",
-      lastUpdatedHint: "新しい順",
-      manualOrderHint: "行をドラッグして並べ替えます",
       switchedToManual: "手動の並び順に切り替えました。行をドラッグして並べ替えます",
       organizeChats: "チャットを整理",
       organizeProjects: "プロジェクトを整理",
@@ -882,6 +879,16 @@ export const ja = {
         revokeConfirmAction: "すべてのリンクを失効",
         revoked: "すべてのプレビューリンクを失効させました",
         revokeError: "プレビューリンクを失効させることができませんでした",
+      },
+      managedProviderUrls: {
+        sectionTitle: "管理対象アカウント",
+        enableLabel: "ローカルおよびネットワーク接続",
+        enableDescription:
+          "管理対象アカウントが、このコンピューターや LAN 上の Ollama や llama.cpp サーバーなど、ローカルまたはネットワークのアドレスに接続を向けられるようにします。既定ではオフです。オンにすると、これらのアカウントがお使いのコンピューターやネットワークで動作しているサービスに到達できるようになるためです。",
+        lockedByEnvironment:
+          "このサーバーの UNSLOTH_STUDIO_BLOCK_PRIVATE_PROVIDER_URLS=1 によって決まります。すべてのアカウントでプライベートアドレスが拒否されます。",
+        loadError: "管理対象アカウントの接続設定を読み込めませんでした。",
+        saveError: "管理対象アカウントの接続設定を保存できませんでした。",
       },
       notifications: {
         sectionTitle: "通知",

@@ -216,9 +216,6 @@ export const hi = {
       priority: "प्राथमिकता",
       lastUpdated: "अंतिम अपडेट",
       manualOrder: "मैन्युअल क्रम",
-      priorityHint: "सक्रिय और अपठित पहले",
-      lastUpdatedHint: "सबसे नए पहले",
-      manualOrderHint: "पंक्तियाँ खींचकर क्रम बदलें",
       switchedToManual: "अब मैन्युअल क्रम: पंक्तियाँ खींचकर क्रम बदलें",
       organizeChats: "चैट व्यवस्थित करें",
       organizeProjects: "प्रोजेक्ट व्यवस्थित करें",
@@ -893,6 +890,16 @@ export const hi = {
         revokeConfirmAction: "सभी लिंक रद्द करें",
         revoked: "सभी पूर्वावलोकन लिंक रद्द किए गए",
         revokeError: "पूर्वावलोकन लिंक रद्द नहीं किए जा सके",
+      },
+      managedProviderUrls: {
+        sectionTitle: "प्रबंधित खाते",
+        enableLabel: "स्थानीय और नेटवर्क कनेक्शन",
+        enableDescription:
+          "प्रबंधित खातों को अपने कनेक्शन स्थानीय या नेटवर्क पतों की ओर इंगित करने दें, जैसे इस कंप्यूटर या आपके लोकल नेटवर्क पर चल रहा Ollama या llama.cpp सर्वर। डिफ़ॉल्ट रूप से बंद, क्योंकि इससे वे खाते आपके कंप्यूटर और नेटवर्क पर चल रही सेवाओं तक पहुँच सकते हैं।",
+        lockedByEnvironment:
+          "इस सर्वर पर UNSLOTH_STUDIO_BLOCK_PRIVATE_PROVIDER_URLS=1 द्वारा तय, जो सभी खातों के लिए निजी पतों को अस्वीकार करता है।",
+        loadError: "प्रबंधित खाता कनेक्शन सेटिंग्स लोड नहीं हो सकीं।",
+        saveError: "प्रबंधित खाता कनेक्शन सेटिंग्स सहेजी नहीं जा सकीं।",
       },
       notifications: {
         sectionTitle: "सूचनाएं",
