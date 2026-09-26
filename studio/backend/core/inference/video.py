@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
+from hub.utils.hf_errors import modelscope_missing
 from loggers import get_logger
 
 from .diffusion_attention import (
@@ -99,6 +100,7 @@ from .diffusion_memory import (
     settled_snapshot_device_memory,
 )
 from .diffusion_torchao_patches import install_torchao_int_mm_patch
+from . import diffusion_render_thread as render_thread
 from .diffusion_speed import (
     SPEED_DEFAULT,
     SPEED_EAGER,
@@ -2293,7 +2295,7 @@ class VideoBackend:
 
             with self._lock:
                 if self._load_token == token and self._loading is not None:
-                    self._loading.error = redact_native_paths(str(exc))
+                    self._loading.error = modelscope_missing(exc) or redact_native_paths(str(exc))
 
     def _run_load_h3_native(
         self,
@@ -7118,7 +7120,7 @@ class VideoBackend:
                     self._reset_step_cache(pipe)
                 try:
                     with torch.inference_mode(), protect_ctx, progress_ctx(), sigma_ctx:
-                        output = pipe(**kwargs)
+                        output = render_thread.run("video", lambda: pipe(**kwargs))
                 except _VideoGenerationCancelled:
                     # Unwinding by exception skips maybe_free_model_hooks(); under offload the onloaded modules would
                     # stay on the GPU.

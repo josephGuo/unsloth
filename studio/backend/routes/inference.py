@@ -80,6 +80,7 @@ from utils.api_errors import openai_error_body, anthropic_error_body, error_body
 from utils.audio_tokens import GGUF_TTS_AUDIO_TYPES as _GGUF_TTS_AUDIO_TYPES
 from utils.upload_limits import STT_AUDIO_B64_MAX_CHARS, STT_AUDIO_RAW_MAX_BYTES
 from hub.dependencies import get_hf_token, get_request_hf_token
+from hub.utils.hf_errors import modelscope_missing
 from hub.utils.hf_tokens import HfTokenArg
 from hub.services.models.ollama import (
     acquire_ollama_model_ref,
@@ -10329,11 +10330,12 @@ async def _maybe_auto_switch_model(
                     speech_codec_path = speech_preflight_result.codec_path
                 elif isinstance(speech_preflight_result, dict):
                     speech_cache_environment = speech_preflight_result
-            except Exception:
+            except Exception as exc:
                 raise HTTPException(
                     status_code = 503,
                     detail = openai_error_body(
-                        "The requested model's codec assets are unavailable. Connect this "
+                        modelscope_missing(exc)
+                        or "The requested model's codec assets are unavailable. Connect this "
                         "server to the network once to download them, or install them in the "
                         "active cache before retrying.",
                         status = 503,
@@ -15971,13 +15973,21 @@ def _gguf_load_cancelled(llama_backend, load_cancel_event: Optional[threading.Ev
     )
 
 
-async def _run_gguf_load_attempt(llama_backend, intent, load_cancel_event) -> bool:
+async def _run_gguf_load_attempt(
+    llama_backend,
+    intent,
+    load_cancel_event,
+    codec_failures: Optional[list] = None,
+) -> bool:
+    def load() -> bool:
+        loaded = llama_backend.load_model(intent = intent, load_cancel_event = load_cancel_event)
+        failure = getattr(llama_backend, "codec_failure", lambda: None)()
+        if isinstance(failure, str) and codec_failures is not None:
+            codec_failures.append(failure)
+        return loaded
+
     try:
-        return await asyncio.to_thread(
-            llama_backend.load_model,
-            intent = intent,
-            load_cancel_event = load_cancel_event,
-        )
+        return await asyncio.to_thread(load)
     except GgufDownloadCancelled:
         return False
 
@@ -16906,6 +16916,7 @@ async def _load_model_impl(
             if gguf_intent is None:
                 raise RuntimeError("GGUF load intent was not resolved")
             load_intent = gguf_intent
+            codec_failures: list[str] = []
 
             # Run a single load attempt with the given tensor flag + extras.
             async def _attempt_gguf_load(
@@ -16926,6 +16937,7 @@ async def _load_model_impl(
                     llama_backend,
                     attempt,
                     load_cancel_event,
+                    codec_failures,
                 )
 
             # Tensor parallelism is arch-gated in llama.cpp and crashes some loads
@@ -16958,7 +16970,9 @@ async def _load_model_impl(
                     raise HTTPException(status_code = 409, detail = "Model load cancelled")
                 raise HTTPException(
                     status_code = 500,
-                    detail = f"Failed to load GGUF model: {model_log_label if native_grant_backed else config.display_name}",
+                    detail = codec_failures[-1]
+                    if codec_failures
+                    else f"Failed to load GGUF model: {model_log_label if native_grant_backed else config.display_name}",
                 )
 
             # An Images/Video acquire can land in the gap between the acquire above and load_model clearing the cancel event, so
@@ -31666,6 +31680,16 @@ async def _studio_embeddings(
     return Response(content = json.dumps(payload), media_type = "application/json")
 
 
+def _embedding_width(resp) -> Optional[int]:
+    try:
+        embedding = resp.json()["data"][0]["embedding"]
+        if isinstance(embedding, str):
+            return len(base64.b64decode(embedding)) // 4
+        return len(embedding)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _embeddings_input_present(body: dict) -> bool:
     """Whether an embeddings body carries a usable ``input`` (non-empty)."""
     inp = body.get("input")
@@ -31761,6 +31785,9 @@ async def openai_embeddings(request: Request, current_subject: str = Depends(get
     # no-pooling error on /v1/embeddings against a non-embedding GGUF), so claiming before the
     # upstream response would strand a preview-owned checkpoint as Unsloth-owned.
 
+    # llama-server ignores `dimensions`; checked against the returned width below.
+    body = dict(body)
+    dimensions = body.pop("dimensions", None)
     target_url = f"{llama_backend.base_url}/v1/embeddings"
     prompt_text = _flatten_monitor_prompt(body.get("input", ""))
     monitor_id = None
@@ -31825,6 +31852,10 @@ async def openai_embeddings(request: Request, current_subject: str = Depends(get
         finally:
             _direct_llama_request_finished()
             _tracker.__exit__(None, None, None)
+    if resp.status_code == 200 and dimensions is not None and dimensions != _embedding_width(resp):
+        detail = f"'dimensions' is not supported by {_llama_public_model_id(llama_backend)}."
+        api_monitor.fail(monitor_id, detail)
+        raise HTTPException(status_code = 400, detail = detail)
     if resp.status_code != 200:
         api_monitor.fail(monitor_id, resp.text[:500])
     else:
@@ -34127,9 +34158,13 @@ async def openai_responses(
 _STUDIO_ANTHROPIC_TOOL_ALIASES = {
     "web_search": "web_search",
     "web_search_20250305": "web_search",
+    "web_search_20260209": "web_search",
+    "web_search_20260318": "web_search",
     "web_fetch": "web_search",
     "web_fetch_20250910": "web_search",
     "web_fetch_20260209": "web_search",
+    "web_fetch_20260309": "web_search",
+    "web_fetch_20260318": "web_search",
     "python": "python",
     "terminal": "terminal",
     "read_skill": "read_skill",
