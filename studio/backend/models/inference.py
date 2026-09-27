@@ -1226,6 +1226,14 @@ class _InferenceRuntimeFields(BaseModel):
             "to check, since a model with its own make_cache ignores the requested size."
         ),
     )
+    mlx_context_budget: Optional[int] = Field(
+        None,
+        description = (
+            "Token limit enforced per request rather than by the KV cache, set where a "
+            "requested cache width took the cache and context_length could not bound it. "
+            "A request over it is refused; null where context_length bounds the cache itself."
+        ),
+    )
     supports_reasoning: bool = Field(
         False,
         description = "Whether model supports thinking/reasoning mode (enable_thinking or reasoning_effort)",
@@ -2118,6 +2126,11 @@ def _normalize_permission_mode(value: Any) -> Any:
     return value
 
 
+class SandboxAttachment(BaseModel):
+    sha256: str = Field(..., pattern = r"^[0-9a-f]{64}$")
+    name: str = Field(..., max_length = 1024)
+
+
 class ChatCompletionRequest(BaseModel):
     """OpenAI-compatible chat completion request.
 
@@ -2428,6 +2441,14 @@ class ChatCompletionRequest(BaseModel):
     session_id: Optional[str] = Field(
         None,
         description = "[x-unsloth] Session/thread ID for scoping tool execution sandbox.",
+    )
+    sandbox_attachments: Optional[list[SandboxAttachment]] = Field(
+        None,
+        max_length = 64,
+        description = (
+            "[x-unsloth] Chat attachment originals (hashes from POST /api/chat/attachment-originals) "
+            "to copy into the session sandbox before the tool loop, when the python tool is enabled."
+        ),
     )
     thread_id: Optional[str] = Field(
         None,
