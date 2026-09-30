@@ -6785,6 +6785,25 @@ def _backfill_usage_from_timings(usage, timings):
     return out
 
 
+def _llama_chunk_has_generated_output(data: dict) -> bool:
+    if data.get("type") == "diffusion_frame":
+        return True
+    choices = data.get("choices")
+    if not isinstance(choices, list):
+        return False
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        delta = choice.get("delta")
+        if isinstance(delta, dict) and any(
+            value not in (None, "", []) for key, value in delta.items() if key != "role"
+        ):
+            return True
+        if choice.get("text") not in (None, ""):
+            return True
+    return False
+
+
 def _report_live_llama_timings(callback, chunk) -> None:
     """Report request-scoped llama.cpp progress without altering the public stream."""
     if callback is None or not isinstance(chunk, dict):
@@ -6795,6 +6814,7 @@ def _report_live_llama_timings(callback, chunk) -> None:
     sample.pop("prompt_ms", None)
     progress = chunk.get("prompt_progress")
     if isinstance(progress, dict):
+        sample["prompt_progress"] = dict(progress)
         try:
             processed = max(0.0, float(progress.get("processed", 0)))
             cached = max(0.0, float(progress.get("cache", 0)))
@@ -6807,6 +6827,8 @@ def _report_live_llama_timings(callback, chunk) -> None:
                 )
         except (TypeError, ValueError, OverflowError):
             pass
+    if getattr(callback, "needs_phase", True) and _llama_chunk_has_generated_output(chunk):
+        sample["running_phase"] = "token_generation"
     if not sample:
         return
     try:
@@ -34742,22 +34764,7 @@ class LlamaCppBackend:
         data = LlamaCppBackend._sse_event_payload(event)
         if data is None:
             return False
-        if data.get("type") == "diffusion_frame":
-            return True
-        choices = data.get("choices")
-        if not isinstance(choices, list):
-            return False
-        for choice in choices:
-            if not isinstance(choice, dict):
-                continue
-            delta = choice.get("delta")
-            if isinstance(delta, dict) and any(
-                value not in (None, "", []) for key, value in delta.items() if key != "role"
-            ):
-                return True
-            if choice.get("text") not in (None, ""):
-                return True
-        return False
+        return _llama_chunk_has_generated_output(data)
 
     @staticmethod
     def _iter_text_cancellable(
@@ -35220,6 +35227,7 @@ class LlamaCppBackend:
         compaction_headroom_ratio: Optional[float] = None,
         thread_id: Optional[str] = None,
         tools_withheld: bool = False,
+        thinking_budget_tokens: Optional[int] = None,
         _allow_respawn_retry: bool = True,
     ) -> Generator[Union[str, dict], None, None]:
         """
@@ -35274,6 +35282,8 @@ class LlamaCppBackend:
         )
         if _reasoning_kw is not None:
             payload["chat_template_kwargs"] = _reasoning_kw
+        if thinking_budget_tokens is not None:
+            payload["thinking_budget_tokens"] = thinking_budget_tokens
         if continue_final_message:
             # llama-server applies the template; it rejects both flags set true.
             payload["continue_final_message"] = True
@@ -35582,6 +35592,7 @@ class LlamaCppBackend:
                     # The retry refits, so it must be told the same about this request's
                     # tools as the first attempt was.
                     tools_withheld = tools_withheld,
+                    thinking_budget_tokens = thinking_budget_tokens,
                     _allow_respawn_retry = False,
                 )
                 return
@@ -35643,6 +35654,7 @@ class LlamaCppBackend:
         # where the previous round's request has completed.
         on_conversation_grew: Optional[Callable[[list], None]] = None,
         on_decode_slot: Optional[Callable[[str, int], None]] = None,
+        thinking_budget_tokens: Optional[int] = None,
     ) -> Generator[dict, None, None]:
         """
         Agentic loop: let the model call tools, execute them, and continue.
@@ -36385,6 +36397,8 @@ class LlamaCppBackend:
                 payload["tool_choice"] = requested_choice
             if _reasoning_kw is not None:
                 payload["chat_template_kwargs"] = _reasoning_kw
+            if thinking_budget_tokens is not None:
+                payload["thinking_budget_tokens"] = thinking_budget_tokens
             # Re-checked per iteration: once a tool result is appended the partial is
             # no longer trailing, so later turns are normal.
             if continue_final_message and trailing_assistant_text(conversation):
@@ -39064,6 +39078,8 @@ class LlamaCppBackend:
             stream_payload["logit_bias"] = logit_bias
         if _reasoning_kw is not None:
             stream_payload["chat_template_kwargs"] = _reasoning_kw
+        if thinking_budget_tokens is not None:
+            stream_payload["thinking_budget_tokens"] = thinking_budget_tokens
         stream_payload["max_tokens"] = _final_max_tokens
         if stop:
             stream_payload["stop"] = stop

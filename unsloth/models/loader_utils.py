@@ -53,11 +53,11 @@ WORLD_SIZE_KEYS = ("WORLD_SIZE",)
 LOCAL_RANK_ONLY_KEYS = ("LOCAL_RANK",)
 
 BAD_MAPPINGS = {
-    "unsloth/Qwen3-32B-unsloth-bnb-4bit".lower(): "unsloth/Qwen3-32B-bnb-4bit".lower(),  # 32B dynamic quant is way too big
-    "unsloth/Qwen3-30B-A3B-unsloth-bnb-4bit".lower(): "unsloth/Qwen3-30B-A3B".lower(),  # HF loads MoEs too slowly
-    "unsloth/Qwen3-30B-A3B-bnb-4bit".lower(): "unsloth/Qwen3-30B-A3B".lower(),  # We rather do it on the fly
-    "unsloth/Qwen3-30B-A3B-Base-unsloth-bnb-4bit".lower(): "unsloth/Qwen3-30B-A3B-Base".lower(),  # HF loads MoEs too slowly
-    "unsloth/Qwen3-30B-A3B-Base-bnb-4bit".lower(): "unsloth/Qwen3-30B-A3B-Base".lower(),  # We rather do it on the fly
+    "unsloth/Qwen3-32B-unsloth-bnb-4bit".lower(): "unsloth/Qwen3-32B-bnb-4bit",  # 32B dynamic quant is way too big
+    "unsloth/Qwen3-30B-A3B-unsloth-bnb-4bit".lower(): "unsloth/Qwen3-30B-A3B",  # HF loads MoEs too slowly
+    "unsloth/Qwen3-30B-A3B-bnb-4bit".lower(): "unsloth/Qwen3-30B-A3B",  # We rather do it on the fly
+    "unsloth/Qwen3-30B-A3B-Base-unsloth-bnb-4bit".lower(): "unsloth/Qwen3-30B-A3B-Base",  # HF loads MoEs too slowly
+    "unsloth/Qwen3-30B-A3B-Base-bnb-4bit".lower(): "unsloth/Qwen3-30B-A3B-Base",  # We rather do it on the fly
 }
 
 
@@ -282,6 +282,148 @@ def planner_quantization_kwargs(
             return kwargs
         kwargs["llm_int8_skip_modules"] = SKIP_QUANTIZATION_MODULES + list(extra_skip_modules or [])
     return kwargs
+
+
+def _single_device_index(device_map):
+    """The one CUDA device a string/int device map resolves to on this host, else None."""
+    if isinstance(device_map, bool):
+        return None
+    if isinstance(device_map, int):
+        return device_map
+    if isinstance(device_map, torch.device):
+        if device_map.type != "cuda":
+            return None
+        # An unindexed torch.device means the current device (set_device(local_rank)), not 0.
+        return device_map.index if device_map.index is not None else torch.cuda.current_device()
+    if not isinstance(device_map, str):
+        return None
+    if device_map.startswith("cuda:"):
+        try:
+            return int(device_map.split(":", 1)[1])
+        except ValueError:
+            return None
+    if device_map == "cuda":
+        # transformers maps a bare "cuda" to cuda:{LOCAL_RANK}, one device on any host.
+        try:
+            return int(os.environ.get("LOCAL_RANK", 0))
+        except ValueError:
+            return None
+    if (
+        device_map in ("auto", "sequential", "balanced", "balanced_low_0")
+        or isinstance(device_map, _DefaultDeviceMap)
+        or device_map in AUTOMATIC_DEVICE_MAPS
+    ):
+        try:
+            if DEVICE_TYPE_TORCH == "cuda" and torch.cuda.device_count() == 1:
+                return 0
+        except Exception:
+            return None
+    return None
+
+
+def no_placement_tensor_names(model):
+    """Every tensor name under a module owning one of the model's `_no_placement_params`."""
+    names = getattr(model, "_no_placement_params", None)
+    if not names:
+        return set()
+    tensors = list(model.named_parameters(remove_duplicate = False)) + list(
+        model.named_buffers(remove_duplicate = False)
+    )
+    owners = {
+        name.rsplit(".", 1)[0]
+        for name, _ in tensors
+        if any(name == n or name.endswith("." + n) for n in names)
+    }
+    return {name for name, _ in tensors if any(name.startswith(o + ".") for o in owners)}
+
+
+def exclude_no_placement_params(device_map, model_class, config):
+    """Keep `_no_placement_params` off the device map (on CPU): transformers' handling sent all of
+    Qwen4Exp to CPU on one GPU. `UNSLOTH_PLACE_NO_PLACEMENT_PARAMS=1` restores it."""
+    names = getattr(model_class, "_no_placement_params", None) if model_class is not None else None
+    if not names or os.environ.get("UNSLOTH_PLACE_NO_PLACEMENT_PARAMS", "0") == "1":
+        return device_map
+    if isinstance(device_map, dict):
+        base = dict(device_map)
+    else:
+        index = _single_device_index(device_map)
+        if index is None:
+            print(
+                f"Unsloth: {model_class.__name__} keeps {', '.join(names)} off the device map, but "
+                f"device_map = {device_map!r} spans several devices; leaving the placement to transformers."
+            )
+            return device_map
+        base = {"": index}
+    try:
+        from accelerate import init_empty_weights
+        with init_empty_weights():
+            meta = model_class._from_config(config)
+    except Exception as error:
+        print(
+            f"Unsloth: could not build {model_class.__name__} on meta to place {names} ({error})."
+        )
+        return device_map
+    matched = {
+        name
+        for name, _ in list(meta.named_parameters()) + list(meta.named_buffers())
+        if any(name == n or name.endswith("." + n) for n in names)
+    }
+    if not matched:
+        return device_map
+    # Whole owning module: FP8Embedding multiplies by a sibling weight_scale on the same device.
+    excluded_modules = sorted({name.rsplit(".", 1)[0] for name in matched})
+    excluded = {
+        name
+        for name, _ in list(meta.named_parameters()) + list(meta.named_buffers())
+        if any(name.startswith(module + ".") for module in excluded_modules)
+    }
+
+    def owner(path):
+        best = None
+        for key in out:
+            if key == "" or path == key or path.startswith(key + "."):
+                if best is None or len(key) > len(best):
+                    best = key
+        return best
+
+    out = dict(base)
+    for path in excluded_modules:
+        while (key := owner(path)) is not None:
+            device = out[key]
+            # Already off the GPU: keep the module key so accelerate's offload hooks still cover it.
+            if str(device).split(":")[0] in ("cpu", "disk", "meta"):
+                break
+            out.pop(key)
+            if key == path:
+                continue
+            module = meta.get_submodule(key) if key else meta
+            prefix = key
+            parts = path[len(key) + 1 :].split(".") if key else path.split(".")
+            for part in parts:
+                for child_name, _ in module.named_children():
+                    if child_name != part:
+                        out.setdefault(f"{prefix}.{child_name}" if prefix else child_name, device)
+                for tensor_name, _ in list(module.named_parameters(recurse = False)) + list(
+                    module.named_buffers(recurse = False)
+                ):
+                    if tensor_name != part:
+                        out.setdefault(f"{prefix}.{tensor_name}" if prefix else tensor_name, device)
+                module = getattr(module, part)
+                prefix = f"{prefix}.{part}" if prefix else part
+    billions = (
+        sum(
+            t.numel()
+            for n, t in list(meta.named_parameters()) + list(meta.named_buffers())
+            if n in excluded
+        )
+        / 1e9
+    )
+    print(
+        f"Unsloth: keeping {', '.join(excluded_modules)} ({billions:.1f}B parameters, frozen) on CPU; "
+        f"set UNSLOTH_PLACE_NO_PLACEMENT_PARAMS=1 to place it on the GPU instead."
+    )
+    del meta
+    return out
 
 
 def compressed_tensors_planner_bits(model_config, load_in_4bit, load_in_8bit):
@@ -1092,12 +1234,60 @@ def _resolve_with_mappers(
     )
 
 
+def _prefer_legacy_lowercase_cache(
+    repo_id,
+    local_files_only = False,
+    cache_dir = None,
+    revision = None,
+):
+    # The mapper returned lowercased ids before #2506, so an offline cache may only hold that spelling.
+    if not (local_files_only or _env_says_offline()) or not isinstance(repo_id, str):
+        return repo_id
+    legacy = repo_id.lower()
+    if legacy == repo_id:
+        return repo_id
+    try:
+        from huggingface_hub import try_to_load_from_cache
+
+        if cache_dir is None:
+            # transformers 4.x still honours TRANSFORMERS_CACHE, which can differ from HF_HUB_CACHE.
+            from transformers.utils import hub as _tf_hub
+            cache_dir = getattr(_tf_hub, "TRANSFORMERS_CACHE", None)
+
+        def cached(repo, files):
+            return any(
+                isinstance(
+                    try_to_load_from_cache(repo, f, cache_dir = cache_dir, revision = revision), str
+                )
+                for f in files
+            )
+
+        # A config-only canonical snapshot must not hide a legacy one that also has weights.
+        weights = (
+            "model.safetensors",
+            "model.safetensors.index.json",
+            "pytorch_model.bin",
+            "pytorch_model.bin.index.json",
+        )
+        for files in (weights, ("config.json",)):
+            if cached(repo_id, files) and cached(repo_id, ("config.json",)):
+                return repo_id
+            if cached(legacy, files) and cached(legacy, ("config.json",)):
+                return legacy
+    except Exception:
+        pass
+    return repo_id
+
+
 def get_model_name(
     model_name,
     load_in_4bit = True,
     load_in_fp8 = False,
     token = None,
     trust_remote_code = False,
+    local_files_only = False,
+    cache_dir = None,
+    revision = None,
 ):
     assert load_in_fp8 in (True, False, "block")
     new_model_name = _resolve_with_mappers(
@@ -1152,6 +1342,13 @@ def get_model_name(
 
     if new_model_name is None:
         new_model_name = model_name
+    else:
+        # Also when the result equals the input: main returned it lowercased, so that is what is cached.
+        # The loader drops the revision on a real remap (_revision_for_resolved_repo), so probe main then.
+        same_repo = new_model_name.lower() == str(model_name).lower()
+        new_model_name = _prefer_legacy_lowercase_cache(
+            new_model_name, local_files_only, cache_dir, revision if same_repo else None
+        )
 
     return new_model_name
 

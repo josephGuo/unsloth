@@ -303,6 +303,7 @@ import { usePublishedFrame } from "@/features/settings/hooks/use-published-frame
 import { useVoiceSettingsStore } from "@/features/settings/stores/voice-settings-store";
 import { applyQwenThinkingParams } from "@/features/chat/utils/qwen-params";
 import { isTauri } from "@/lib/api-base";
+import { InternetGlyph } from "@/lib/internet-icon";
 import { copyToClipboard } from "@/lib/copy-to-clipboard";
 import { MenuDismissGuard } from "@/lib/menu-dismiss-guard";
 import { NonModalDropdownMenu } from "@/components/ui/non-modal-dropdown-menu";
@@ -356,7 +357,6 @@ import {
   Columns2Icon,
   SlidersHorizontalIcon,
   GitBranchIcon,
-  GlobeIcon,
   HeadphonesIcon,
   Loader2Icon,
   MoreHorizontalIcon,
@@ -2161,7 +2161,7 @@ export const Thread: FC<{
                 : // + the chat-model notice, which is an opaque absolute bar
                   // directly under the header. 0px whenever it is not showing,
                   // so every other surface keeps the padding it had.
-                  "pt-[calc(var(--studio-content-top-inset,0px)+var(--studio-chat-header-height,48px)+var(--studio-chat-notice-height,0px))]",
+                  "[--thread-header-offset:calc(var(--studio-content-top-inset,0px)+var(--studio-chat-header-height,48px)+var(--studio-chat-notice-height,0px))] pt-[var(--thread-header-offset)]",
             )}
           >
             {!hideWelcome && (
@@ -2405,7 +2405,7 @@ const ThreadComposerDock: FC<{
       className={cn(
         // Inset both sides, not just the right: the offset keeps the bottom
         // fade off the scrollbar, and a one-sided one also moves the centre.
-        "aui-thread-composer-dock pointer-events-none absolute bottom-0 left-0 right-0 md:left-[calc(10px*var(--ui-space-scale,1))] md:right-[calc(10px*var(--ui-space-scale,1))]",
+        "aui-thread-composer-dock pointer-events-none absolute bottom-0 left-0 right-0 md:left-[var(--thread-scrollbar-gutter,10px)] md:right-[var(--thread-scrollbar-gutter,10px)]",
         overlay ? "z-40" : "z-20",
       )}
     >
@@ -6193,7 +6193,7 @@ const WebSearchToggle: FC = () => {
       aria-label={toolsEnabled ? "Disable web search" : "Enable web search"}
     >
       <PillGlyph>
-        <GlobeIcon className="size-[calc(15px*var(--ui-space-scale,1))]" />
+        <InternetGlyph className="size-[calc(15px*var(--ui-space-scale,1))]" />
       </PillGlyph>
       <span>Search</span>
     </button>
@@ -6373,7 +6373,7 @@ const ToolStatusDisplay: FC = () => {
   const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000));
   const kind = toolStatusKind(toolStatus);
   const isNudging = kind === "nudge";
-  const StatusIcon = kind === "terminal" ? TerminalIcon : GlobeIcon;
+  const StatusIcon = kind === "terminal" ? TerminalIcon : InternetGlyph;
   return (
     <div
       data-testid="composer-tool-status"
@@ -6904,7 +6904,7 @@ const ComposerToolsMenu: FC<{
             }
           }}
         >
-          <GlobeIcon />
+          <InternetGlyph />
           Web search
           {toolsEnabled && !searchDisabled ? (
             <HugeiconsIcon
@@ -8674,6 +8674,8 @@ const EditComposer: FC = () => {
   const { inputProps, isComposingRef } = useImeComposerInputHandlers();
   const resendAfterCancelRef = useRef(false);
   const researchActive = useThreadResearchActive();
+  // send() drops an empty composer, e.g. a paste-only message whose chip was removed.
+  const editEmpty = useAuiState(({ composer }) => composer.isEmpty);
 
   useAuiEvent("thread.runEnd", () => {
     if (!resendAfterCancelRef.current) {
@@ -8706,6 +8708,7 @@ const EditComposer: FC = () => {
           submitEdit();
         }}
       >
+        <ComposerAttachments className="mb-0 px-3 pt-3 [&_.aui-pasted-text-chip:not(:hover)]:bg-background" />
         <ComposerPrimitive.Input
           submitMode={
             effectiveSendShortcut(sendShortcut, editMultiline ? "\n" : "") === "mod-enter"
@@ -8724,7 +8727,7 @@ const EditComposer: FC = () => {
               Cancel
             </Button>
           </ComposerPrimitive.Cancel>
-          <Button type="submit" size="sm" disabled={researchActive}>
+          <Button type="submit" size="sm" disabled={researchActive || editEmpty}>
             Send
           </Button>
         </div>
