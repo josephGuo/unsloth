@@ -4931,6 +4931,10 @@ class VideoBackend:
         raise_on_unified_memory_shortfall(plan, family = getattr(fam, "name", None), logger = logger)
 
         # ── build the pipeline.
+        from .ltx2_import_compat import ensure_ltx2_pipelines_importable, is_ltx2_pipeline_class
+
+        if is_ltx2_pipeline_class(fam.pipeline_class):
+            ensure_ltx2_pipelines_importable(logger)
         pipeline_cls = getattr(diffusers, fam.pipeline_class)
         # cache_dir pins every loader call to the live cache root, so a mid-session change cannot split one model across
         # roots.
@@ -6123,12 +6127,19 @@ class VideoBackend:
         # cache_dir for the same reason as the token: load_components forwards extra kwargs through ComponentSpec.load
         # into each from_pretrained, and without it those ~145 GB of Hub-pinned components resolve against the
         # import-time HF_HUB_CACHE snapshot rather than Unsloth's live cache folder, which the user can move.
+        # Offline by repo id, load_components only warns and returns processor=None (diffusion_offline_source).
+        from .diffusion_offline_source import offline_component_sources
+
+        offline_sources = offline_component_sources(
+            pipe, local_files_only = local_files_only, cache_dir = hub_cache_dir()
+        )
         pipe.load_components(
             workflow = workflow,
             dtype = dtype,
             cache_dir = hub_cache_dir(),
             local_files_only = local_files_only,
             **({"token": hf_token} if hf_token else {}),
+            **({"pretrained_model_name_or_path": offline_sources} if offline_sources else {}),
         )
         # The video VAE loads at float32 and the decode runs under float16 autocast, so both copies are resident for the
         # whole decode. Pre-casting the decoder removes the pair without changing a single output value. The encoder

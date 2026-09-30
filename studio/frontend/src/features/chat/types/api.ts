@@ -625,6 +625,8 @@ export interface OpenAIChatCompletionsRequest {
   seed?: number;
   image_base64?: string;
   audio_base64?: string;
+  /** Further clips after audio_base64, in attach order. */
+  extra_audio_base64?: string[];
   video_base64?: string;
   use_adapter?: boolean | string | null;
   enable_thinking?: boolean | null;
@@ -735,6 +737,8 @@ export interface OpenAIChatChunk {
     total_tokens: number;
   };
   timings?: Record<string, number>;
+  /** Studio heuristic: the response may have stopped mid-quote. */
+  quote_cut?: boolean;
   context_truncated?: {
     dropped_messages: number;
     prompt_tokens_before?: number;
