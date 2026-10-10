@@ -1647,6 +1647,17 @@ export const ja = {
         showAudioCppUpdates: "audio.cpp のアップデート通知",
         showAudioCppUpdatesDescription:
           "音声ページに必要な audio.cpp ランタイムの更新があるときに通知します。音声機能を使わない場合はオフにしてください。",
+        showUnslothUpdates: "Unsloth のアップデート通知",
+        showUnslothUpdatesDescription:
+          "新しいバージョンの Unsloth をインストールできるようになったときに通知します。",
+        frequency: {
+          always: "常に",
+          daily: "1日1回",
+          weekly: "週に1回",
+          biweekly: "2週間に1回",
+          monthly: "月に1回",
+          off: "オフ",
+        },
       },
       startup: {
         sectionTitle: "起動",
@@ -2082,6 +2093,10 @@ export const ja = {
           "PyTorch は CPU 専用ビルド ({version}) のため、下の GPU は利用できません。インストールを修復すると GPU サポートが復元されます。",
         mismatchUnavailable:
           "PyTorch ({version}) は下の GPU を初期化できないため、利用できません。GPU ドライバーを確認するか、インストールを修復してください。",
+        driverIdleEvict:
+          "AMD ドライバー {version} には、AMD GPU がアイドル状態のときに Windows がフリーズすることがある既知の不具合があります。特に GPU が複数ある環境で発生しやすくなります。Adrenalin 26.9.2 以降に更新してください。",
+        driverIdleEvictDetails: "詳細",
+        dismissNotice: "閉じる",
         unusableDevice: "利用不可",
         unknownDevice: "不明な GPU",
         deviceWithIndex: "GPU {index}",
@@ -2857,6 +2872,19 @@ export const ja = {
         connectionMissing: "この接続は存在しないか、判定モデルがありません。別のモデルを選んでください。",
         addConnection: "ホスト型の判定モデルを使うには、接続で TypeSafe、Liquid AI、OpenRouter のいずれかを追加してください。",
         openConnections: "接続を開く",
+      },
+      mcp: {
+        title: "エージェントアクセス (MCP)",
+        description: "Claude Code や Codex などのコーディングエージェントが MCP 経由で Unsloth を使えるようにします。エージェントはこのページのアクセストークンでサインインします。",
+        enable: "エージェントの接続を許可",
+        enableDescription: "Unsloth のアクセストークンを持つリクエストに /mcp/ を提供します。",
+        lockedByEnv: "{name} で設定されています。",
+        loadError: "エージェントアクセスの設定を読み込めませんでした。",
+        saveError: "エージェントアクセスの設定を保存できませんでした。",
+        agent: "エージェント",
+        exportKeyHint: "エージェントを起動する前に、{name} にこのページのアクセストークンを設定してください。",
+        configFileHint: "これを {path} に追加してください。",
+        keywords: "mcp model context protocol agents claude codex tools エージェント ツール モデルコンテキストプロトコル",
       },
       usageNoModel:
         "モデルを読み込むかダウンロードすると、実行できる例が表示されます。このサーバーにはまだ指定できるモデルがありません。",
@@ -3744,6 +3772,13 @@ export const ja = {
     discard: "破棄",
     mentions: "スキル",
     manage: "スキルを管理",
+    bulkActions: "スキルの操作",
+    enableAll: "すべて有効にする",
+    disableAll: "すべて無効にする",
+    resetAll: "デフォルトに戻す",
+    resetTitle: "すべてのスキルをリセットしますか？",
+    resetDescription: "すべてのスキルが新規インストール時の状態に戻ります。自分のスキルと Claude のスキルはオン、同梱スキルはオフになり、オン/オフの選択は消去されます。",
+    reset: "リセット",
   },
   library: {
     tabs: {
@@ -3915,6 +3950,7 @@ export const ja = {
       chatAboutThis: "これについてチャット",
       chatWithModel: "このモデルとチャット",
       addToFavorites: "お気に入りに追加",
+      regenerateTitle: "タイトルを再生成",
       removeFromFavorites: "お気に入りから削除",
       download: "ダウンロード",
       addToFolder: "フォルダに追加",

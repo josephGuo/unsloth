@@ -1676,6 +1676,17 @@ export const es = {
         showAudioCppUpdates: "Notificaciones de actualización de audio.cpp",
         showAudioCppUpdatesDescription:
           "Avisa cuando el entorno de ejecución de audio.cpp necesite una actualización para las páginas de Audio. Desactívalo si nunca usas Audio.",
+        showUnslothUpdates: "Notificaciones de actualización de Unsloth",
+        showUnslothUpdatesDescription:
+          "Avisar cuando haya una versión más reciente de Unsloth para instalar.",
+        frequency: {
+          always: "Siempre",
+          daily: "Una vez al día",
+          weekly: "Una vez a la semana",
+          biweekly: "Cada dos semanas",
+          monthly: "Una vez al mes",
+          off: "Desactivado",
+        },
       },
       startup: {
         sectionTitle: "Inicio",
@@ -2126,6 +2137,10 @@ export const es = {
           "PyTorch es una compilación solo para CPU ({version}), por lo que las GPU de abajo no se pueden usar. Repare la instalación para restaurar la compatibilidad con GPU.",
         mismatchUnavailable:
           "PyTorch ({version}) no puede inicializar las GPU de abajo, por lo que no se pueden usar. Revise el controlador de la GPU o repare la instalación.",
+        driverIdleEvict:
+          "El controlador de AMD {version} tiene un error conocido que puede congelar Windows cuando una GPU de AMD está inactiva, sobre todo con más de una GPU. Actualiza a Adrenalin 26.9.2 o posterior.",
+        driverIdleEvictDetails: "Detalles",
+        dismissNotice: "Descartar",
         unusableDevice: "no utilizable",
         unknownDevice: "GPU desconocida",
         deviceWithIndex: "GPU {index}",
@@ -2924,6 +2939,19 @@ export const es = {
         connectionMissing: "Esta conexión ya no existe o no tiene modelos de decisiones. Elige otro modelo.",
         addConnection: "Para usar un modelo de decisiones alojado, añade TypeSafe, Liquid AI u OpenRouter en Conexiones.",
         openConnections: "Abrir Conexiones",
+      },
+      mcp: {
+        title: "Acceso de agentes (MCP)",
+        description: "Permite que agentes de código como Claude Code y Codex usen Unsloth mediante MCP. Los agentes inician sesión con un token de acceso de esta página.",
+        enable: "Permitir conexiones de agentes",
+        enableDescription: "Sirve /mcp/ a las solicitudes que llevan un token de acceso de Unsloth.",
+        lockedByEnv: "Definido por {name}.",
+        loadError: "No se pudo cargar la configuración de acceso de agentes.",
+        saveError: "No se pudo guardar la configuración de acceso de agentes.",
+        agent: "Agente",
+        exportKeyHint: "Define {name} con un token de acceso de esta página antes de iniciar el agente.",
+        configFileHint: "Añade esto a {path}.",
+        keywords: "mcp model context protocol agents claude codex tools agentes agente herramientas protocolo de contexto de modelo",
       },
       usageNoModel:
         "Carga o descarga un modelo para ver ejemplos ejecutables. Este servidor todavía no tiene ningún modelo que indicar.",
@@ -3867,6 +3895,13 @@ export const es = {
     discard: "Descartar",
     mentions: "Habilidades",
     manage: "Gestionar habilidades",
+    bulkActions: "Acciones de habilidades",
+    enableAll: "Activar todas",
+    disableAll: "Desactivar todas",
+    resetAll: "Restablecer valores predeterminados",
+    resetTitle: "¿Restablecer todas las habilidades?",
+    resetDescription: "Cada habilidad vuelve a como está en una instalación nueva: tus habilidades y las de Claude activadas, las incluidas desactivadas. Se borran tus elecciones de activar y desactivar.",
+    reset: "Restablecer",
   },
   library: {
     tabs: {
@@ -4038,6 +4073,7 @@ export const es = {
       chatAboutThis: "Chatear sobre esto",
       chatWithModel: "Chatear con este modelo",
       addToFavorites: "Añadir a Favoritos",
+      regenerateTitle: "Regenerar título",
       removeFromFavorites: "Quitar de Favoritos",
       download: "Descargar",
       addToFolder: "Añadir a carpeta",
