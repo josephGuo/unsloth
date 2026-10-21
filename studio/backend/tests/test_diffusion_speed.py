@@ -675,7 +675,27 @@ def test_cudnn_benchmark_opt_out_image_families():
     # Unmeasured families keep the benchmark.
     from core.inference.diffusion_families import _FAMILIES
     off = {fam.name for fam in _FAMILIES if not fam.cudnn_benchmark}
-    assert off == {"qwen-image", "flux.1", "z-image", "sdxl"}
+    assert off == {"qwen-image", "flux.1", "flux.2-dev", "z-image", "sdxl"}
+
+
+@pytest.mark.parametrize(
+    "repo, cap, pinned",
+    [
+        ("Tongyi-MAI/Z-Image-Turbo", (10, 0), True),
+        ("Tongyi-MAI/Z-Image-Turbo", (8, 9), True),
+        ("Tongyi-MAI/Z-Image-Turbo", (9, 0), False),
+        ("black-forest-labs/FLUX.2-klein-4B", (10, 0), True),
+        ("black-forest-labs/FLUX.2-klein-base-4B", (10, 0), True),
+        ("black-forest-labs/FLUX.2-klein-4B", (8, 9), False),
+        ("black-forest-labs/FLUX.1-schnell", (10, 0), False),
+    ],
+)
+def test_reduction_filter_archs(monkeypatch, repo, cap, pinned):
+    from core.inference import diffusion_compile_config as cc
+    from core.inference.diffusion_families import detect_family
+
+    monkeypatch.setattr(cc, "_device_capability", lambda: cap)
+    assert cc.family_filters_reductions(detect_family(repo)) is pinned
 
 
 def test_speed_max_enables_tf32_and_fused_qkv(monkeypatch):
