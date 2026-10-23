@@ -35,6 +35,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence
 
+from core.inference.inference_gate import holds_inference, pauses_background_embedding
 from core._torchao_stub import (
     alias_torchao_fqn_to_config,
     hide_xformers_built_for_another_torch,
@@ -106,6 +107,7 @@ from .diffusion_device import (
     diffusion_device_scope,
     diffusion_device_target_from_torch_device,
     install_frame_pad_fix,
+    install_vae_sync,
     pin_cuda_ordinal,
     placed_cuda_ordinal,
     auto_cuda_ordinal_for_load,
@@ -164,12 +166,14 @@ from .diffusion_small_host import (
     INT8_DENOISER_NAMES,
     decide_small_host,
     engaged_on as small_host_engaged_on,
+    host_commit_mib,
     host_ram_mib,
     resolve_snapshot_dir,
     stored_components,
     torch_dtype_map as small_host_torch_dtype_map,
 )
 from .model_ids import hf_cache_repo_id
+from .safetensors_pread import pread_available
 from .diffusion_memory import (
     MEMORY_MODE_BALANCED,
     MEMORY_MODE_LOW_VRAM,
@@ -278,6 +282,7 @@ from .diffusion_attention import (
     begin_attention_run,
     report_attention_run,
     select_attention_backend,
+    _dit_head_dims,
     _ensure_attention_backend_installed,
 )
 from . import diffusion_compile_cache as compile_cache
@@ -2577,6 +2582,20 @@ def _tile_for_verdict(
     return restore_vae
 
 
+def plan_is_calibrated(plan: Any) -> bool:
+    """Whether ``plan`` was fitted to the measured activation row rather than the flat estimate: the one-card plan, or
+    a multi-GPU split priced with ``calibrated_split_headroom_mib``. The generate guard then charges conditioning
+    (ControlNet, references) on top and drops the flat default-resolution exemption."""
+    estimates = getattr(plan, "estimates", None) or {}
+    if "calibrated_headroom_mib" in estimates:
+        return True
+    split = (
+        getattr(plan, "layer_split", None) is not None
+        or getattr(plan, "secondary_ordinal", None) is not None
+    )
+    return split and "calibrated_split_headroom_mib" in estimates
+
+
 def _controlnet_streams(state: Any) -> bool:
     """Whether a ControlNet added at generate time streams from host memory instead of loading whole beside the base
     model: under any offload policy, a calibrated placement (budgets only the base model), and a multi-GPU split
@@ -2600,14 +2619,21 @@ def _measured_target(target: Any) -> bool:
         return False
 
 
-def _calibrated_activation(fam: Any, target: Any) -> Any:
-    """Measured activations apply only where measured: NVIDIA with a sub-quadratic attention kernel."""
+def _calibrated_activation(
+    fam: Any,
+    target: Any,
+    *,
+    unpriced_references_ok: bool = False,
+) -> Any:
+    """Measured activations apply only where measured: NVIDIA with a sub-quadratic attention kernel.
+    ``unpriced_references_ok``: skip the reference rule; the caller sizes references via measured_request_extra_mib."""
     if getattr(target, "backend", None) != "cuda" or getattr(target, "vendor", None) != "nvidia":
         return None
     # Measured without input images: references the guard cannot size (no reference_resolutions) would overflow.
     # FLUX.3 can: every reference is resized to 1 MP and the request guard charges those pixels on top.
     if (
-        getattr(fam, "reference", False)
+        not unpriced_references_ok
+        and getattr(fam, "reference", False)
         and not tuple(getattr(fam, "reference_resolutions", ()) or ())
         and not is_flux3_family(fam)
     ):
@@ -2645,7 +2671,7 @@ def _quadratic_attention(
         except Exception:  # noqa: BLE001
             return False
     try:
-        if not sdpa_math_only(target):
+        if not sdpa_math_only(target, _dit_head_dims(pipe)):
             return False
     except Exception:  # noqa: BLE001 - a broken probe must never block a generation
         return False
@@ -3316,6 +3342,15 @@ def _comfy_keep_fp32_pricing(fam: Any, target: Any) -> dict:
         return {}
     fp16 = getattr(target, "dtype", None) is torch.float16
     return {"keep_fp32": keep, "keep_fp32_bytes": 4 if fp16 else None}
+
+
+def _converted_shards_pread(dtype: Any, small_host: Any) -> Any:
+    """Windows: transformers components converted to ``dtype`` read through ``pread`` (no copy-on-write commit for the
+    stored bytes, #14513); components the small-host route loads at their stored dtype stay memory-mapped."""
+    from .safetensors_pread import pread_safetensors
+
+    keep = tuple(small_host.storage_dtypes) if small_host is not None and small_host.engaged else ()
+    return pread_safetensors(convert_to = dtype, keep = keep)
 
 
 class DiffusionBackend:
@@ -4704,6 +4739,7 @@ class DiffusionBackend:
         assert_pick_is_not_speech(repo_id, gguf_filename, hf_token, allow_network)
 
     @_account_owned_load
+    @pauses_background_embedding
     def begin_load(
         self,
         repo_id: str,
@@ -8920,9 +8956,10 @@ class DiffusionBackend:
                                     # The prefetched snapshot dir keeps from_pretrained off the hub (24 GB per FLUX.1
                                     # otherwise)
                                     try:
-                                        pipe = pipeline_cls.from_pretrained(
-                                            _base_local_dir or fetch_base, **pipe_kwargs
-                                        )
+                                        with _converted_shards_pread(dtype, small_host):
+                                            pipe = pipeline_cls.from_pretrained(
+                                                _base_local_dir or fetch_base, **pipe_kwargs
+                                            )
                                     finally:
                                         self._stop_load_prefetch()
                                     if fam.single_file_is_pipeline:
@@ -9191,9 +9228,10 @@ class DiffusionBackend:
                                     pipe_kwargs["torch_dtype"] = small_host_torch_dtype_map(
                                         small_host, dtype
                                     )
-                                pipe = pipeline_cls.from_pretrained(
-                                    _base_local_dir or fetch_base, **pipe_kwargs
-                                )
+                                with _converted_shards_pread(dtype, small_host):
+                                    pipe = pipeline_cls.from_pretrained(
+                                        _base_local_dir or fetch_base, **pipe_kwargs
+                                    )
                                 if small_host is not None and small_host.engaged:
                                     plan = self._apply_small_host_route(
                                         pipe,
@@ -9755,6 +9793,7 @@ class DiffusionBackend:
                     except Exception as exc:  # noqa: BLE001 - keep the stock tiled decode
                         logger.warning("diffusion.vae_tiling: not installed: %s", exc)
                     install_frame_pad_fix(pipe, target, logger = logger)
+                    install_vae_sync(pipe, target, logger = logger)
                     # Before the speed optims so their decode compile lands inside the non-finite check; `off` keeps fp32.
                     vae_fp16 = str(
                         speed_mode or ""
@@ -9880,8 +9919,11 @@ class DiffusionBackend:
                             "unknown"  # adapters baked in at load: a build the key cannot name
                         )
                     try:
-                        # the phase-table seed holds only where it was measured
-                        pipe._unsloth_phase_seeds = _calibrated_activation(fam, target) is not None
+                        # the phase-table seed holds only where it was measured; unpriced references size flat
+                        pipe._unsloth_phase_seeds = (
+                            _calibrated_activation(fam, target, unpriced_references_ok = True)
+                            is not None
+                        )
                         # the dense default / max tier seeds hold on the measured target only
                         pipe._unsloth_dense_tier_seeds = _measured_target(target)
                         # a CFG-capable family may place from a peak recorded without CFG (``cfg:off``)
@@ -10229,8 +10271,11 @@ class DiffusionBackend:
                     install_cfg_batch(
                         pipe, offload_policy = effective_policy, speed_mode = speed_mode, logger = logger
                     )
-                    # Z-Image guided steps at the guidance-off batch: turning CFG on compiles and records nothing new
-                    install_zimage_cfg_split(pipe, offload_policy = effective_policy, logger = logger)
+                    # Z-Image guided steps at the guidance-off batch: turning CFG on compiles and records nothing new.
+                    # compiled_only: an eager denoiser keeps the batched guided call (no graph to protect).
+                    install_zimage_cfg_split(
+                        pipe, offload_policy = effective_policy, logger = logger, compiled_only = True
+                    )
                     te_releaser = te_release.maybe_install(pipe, plan, logger = logger)
                     state = _LoadState(
                         pipe = pipe,
@@ -10247,7 +10292,7 @@ class DiffusionBackend:
                         kind = kind,
                         cpu_offload = effective_policy != OFFLOAD_NONE,
                         offload_policy = effective_policy,
-                        calibrated_placement = "calibrated_headroom_mib" in plan.estimates,
+                        calibrated_placement = plan_is_calibrated(plan),
                         vae_tiling = effective_tiling,
                         memory_mode = plan.requested_mode,
                         speed_mode = effective_speed,
@@ -10925,7 +10970,8 @@ class DiffusionBackend:
                 family = getattr(fam, "name", None),
             )
         )
-        pipe = pipeline_cls.from_pretrained(base_local_dir or base, **pipe_kwargs)
+        with _converted_shards_pread(dtype, None):
+            pipe = pipeline_cls.from_pretrained(base_local_dir or base, **pipe_kwargs)
         check_cancelled()
         pipe.to(device)
         return pipe
@@ -11369,6 +11415,8 @@ class DiffusionBackend:
             host_total_mib = total,
             host_available_mib = available,
             lora_active = lora_active,
+            host_commit_mib = host_commit_mib(),
+            pread_libraries = ("transformers",) if pread_available() else (),
         )
         if decision.engaged or decision.refuse:
             logger.info(
@@ -11377,6 +11425,8 @@ class DiffusionBackend:
                 decision.reason,
                 decision.storage_dtypes,
             )
+        elif decision.available_mib is not None:
+            logger.info("diffusion.small_host: engaged=False (%s)", decision.reason)
         if decision.refuse:
             raise RuntimeError(decision.refuse)
         return decision
@@ -12551,6 +12601,7 @@ class DiffusionBackend:
         )
 
     @_release_render_on_unload
+    @holds_inference
     @with_hires
     def generate(
         self,
@@ -13038,7 +13089,7 @@ class DiffusionBackend:
                         kwargs["strength"] = strength
                     if _hires_pass is not None and _hires_pass.latent_from is not None:
                         # Latent upscaler: the SDXL img2img pipe takes 4-channel latents as the image.
-                        kwargs["image"] = diffusion_hires.encode_upscaled_latents(
+                        kwargs["image"] = diffusion_hires.upscale_latents(
                             pipe, _hires_pass.latent_from, init_pil.size
                         )
                 # width/height: txt2img uses the slider; image-conditioned pipes must use the INPUT IMAGE's size or
@@ -13340,6 +13391,17 @@ class DiffusionBackend:
 
                 if "callback_on_step_end" in call_params:
                     kwargs["callback_on_step_end"] = _on_step
+                # Hires fix latent upscaler (ComfyUI LatentUpscale): the base pass hands the refine pass its latents,
+                # so it skips the VAE decode and the image post-processing that only the discarded pixels needed.
+                latent_output = bool(
+                    _hires_pass is not None and _hires_pass.latent_output and not _hires_pass.refine
+                )
+                if latent_output:
+                    if "output_type" not in call_params or layer_count or soft_overlay is not None:
+                        raise ValueError(
+                            "The latent upscaler needs a pipeline that returns latents."
+                        )
+                    kwargs["output_type"] = "latent"
                 kwargs.update(sd_controls_mod.guidance_rescale_kwargs(sd_controls, call_params))
                 weighting_used = [False]
 
@@ -13559,6 +13621,10 @@ class DiffusionBackend:
                             for (_, s), layers_out in zip(chunk, out):
                                 images.extend(layers_out)
                                 per_image_seeds.extend(s for _ in layers_out)
+                        elif latent_output:
+                            # One (1, C, h, w) per image; a copy, so no later forward can reuse its storage.
+                            images.extend(out[i : i + 1].clone() for i in range(out.shape[0]))
+                            per_image_seeds.extend(s for _, s in chunk)
                         else:
                             if soft_overlay is not None:
                                 out = [overlay_with_mask(o, *soft_overlay) for o in out]
@@ -13586,7 +13652,8 @@ class DiffusionBackend:
                 cuda_graph.seal_lengths(state.cuda_graphs)
                 _record_peak_probe(
                     state,
-                    peak_probe,
+                    # A pass that skipped its VAE decode misses that phase's peak: it must not size a plain render.
+                    None if latent_output else peak_probe,
                     width = guard_width,
                     height = guard_height,
                     batch_size = max(chunk_shapes or [1]),
