@@ -1001,12 +1001,9 @@ def test_tp2_entry_points_outside_the_regions_are_refused():
                         value,
                     )
                 elif key.startswith("trainer:"):
-                    # The Trainer trains a tensor parallel model, but not with checkpoints (default args).
-                    assert value and "does not support Trainer checkpoints" in value, (
-                        applied,
-                        key,
-                        value,
-                    )
+                    # The Trainer takes a tensor parallel model with its default args (save_strategy "steps":
+                    # per-rank checkpoints).
+                    assert value is None, (applied, key, value)
                 elif key.startswith("cached:"):
                     assert value and "cached decoding" in value, (applied, key, value)
 
@@ -1068,6 +1065,13 @@ def test_sharded_loading_refuses_quantized_loads():
             )
 
 
+# Per-step grad norms over 3 AdamW steps. phi3's fused qkv / gate_up shards add reduction-order noise that the
+# optimizer compounds: on the CI runners its step-3 norm lands 6.9e-5 / 7.7e-5 relative off one process
+# (1.5e-6 at step 1), while this host stays inside 1e-5. The step-1 per-gradient check in the test
+# (rtol 1e-4, atol 1e-6) is what catches a real tp error such as a missed all-reduce, and it is unchanged.
+_TP_FSDP2_NORM_REL = {"phi3": 2e-4}
+
+
 @pytest.mark.parametrize(
     "arch,fit_layout,lora_kwargs",
     [
@@ -1103,7 +1107,9 @@ def test_tp2_x_fsdp2_dp2_matches_one_process(arch, fit_layout, lora_kwargs):
             res["losses"],
             res["ref_losses"],
         )
-        assert res["norms"] == pytest.approx(res["ref_norms"], rel = 1e-5), (
+        assert res["norms"] == pytest.approx(
+            res["ref_norms"], rel = _TP_FSDP2_NORM_REL.get(arch, 1e-5)
+        ), (
             res["norms"],
             res["ref_norms"],
         )
@@ -1155,6 +1161,13 @@ def test_trainer_splits_mixed_optimizer_groups_for_tp_only():
             res["losses"],
             ref["losses"],
         )
+        # transformers 5.x would clip mixed DTensor / plain gradients itself (_mixed_mesh_grad_norm). The
+        # reference norm is torch's CPU fp32 vector_norm over the plain lm_head gradient: ~2e-4 off.
+        assert res["grad_norms"] == pytest.approx(ref["grad_norms"], rel = 1e-3), (
+            rank,
+            res["grad_norms"],
+            ref["grad_norms"],
+        )
 
 
 @pytest.mark.parametrize("dp,tp", [(1, 2), (2, 2)])
@@ -1181,9 +1194,10 @@ def test_trainer_trains_a_tensor_parallel_model_like_one_process(dp, tp):
         for key, value in ref["state"].items():
             torch.testing.assert_close(res["state"][key], value, rtol = 1e-4, atol = 1e-6, msg = key)
         refusals = res["refusals"]
-        assert "does not support Trainer checkpoints" in (refusals["checkpoints"] or ""), refusals
+        # Checkpoints are per rank, bitsandbytes AdamW steps local shards (or switches to torch's AdamW).
+        assert refusals["checkpoints"] is None, refusals
         assert "evaluation during training" in (refusals["eval"] or ""), refusals
-        assert "optim = 'adamw_bnb_8bit'" in (refusals["optim_8bit"] or ""), refusals
+        assert refusals["optim_8bit"] is None, refusals
         assert "Trainer.evaluate is not supported" in (refusals["evaluate"] or ""), refusals
         if dp > 1:
             assert "covers 2 of 4 ranks" in (refusals["no_shard_model"] or ""), refusals

@@ -1849,8 +1849,7 @@ def get_model_name(
     if new_model_name is None:
         new_model_name = model_name
     else:
-        # Also when the result equals the input: main returned it lowercased, so that is what is cached.
-        # The loader drops the revision on a real remap (_revision_for_resolved_repo), so probe main then.
+        # Also when equal to the input: main returned it lowercased. A real remap drops the revision.
         same_repo = new_model_name.lower() == str(model_name).lower()
         new_model_name = _prefer_legacy_lowercase_cache(
             new_model_name, local_files_only, cache_dir, revision if same_repo else None
@@ -2496,7 +2495,7 @@ def _route_compressed_tensors_fp8_to_unsloth(
     skip = (),
     default = "0",
 ):
-    # Opt-in for FP8 checkpoints (on-the-fly dequant trains slower than bf16); default beside NVFP4, where the
+    # Opt-in for FP8 checkpoints (on-the-fly dequant trains slower than bf16); default beside NVFP4.
     # decompressed FP8 layers would keep compressed-tensors' graph-breaking fake-quant forward.
     if os.environ.get("UNSLOTH_COMPRESSED_TENSORS_FP8_KERNELS", default) != "1":
         return 0
@@ -2657,8 +2656,7 @@ class _UnslothNVFP4Linear(torch.nn.Linear):
         fn,
         recurse = True,
     ):
-        # model.to(dtype) / .half() may move the packed weight and its scales but never cast them: an fp16 global
-        # scale overflows past 65504 and dequantizes the layer to zeros.
+        # model.to(dtype) must never cast the packed weight or scales: an fp16 global scale overflows.
         quant = {}
         for name in ("weight_packed", "weight_scale", "weight_global_scale", "input_global_scale"):
             param = self._parameters.get(name)
@@ -4572,14 +4570,47 @@ def _is_tensor_subclass_weight(t):
         return False
 
 
+def _holds_float8(t, depth = 0):
+    """True when a tensor, or a tensor subclass's inner tensors (__tensor_flatten__), stores float8."""
+    if "float8" in str(t.dtype):
+        return True
+    if depth > 3 or not hasattr(t, "__tensor_flatten__"):
+        return False
+    try:
+        names = t.__tensor_flatten__()[0]
+    except Exception:
+        return False
+    for name in names:
+        inner = getattr(t, name, None)
+        if isinstance(inner, torch.Tensor) and _holds_float8(inner, depth + 1):
+            return True
+    return False
+
+
+def _ddp_can_flatten(t):
+    """DDP's start-up broadcast flattens every parameter (_flatten_dense_tensors); probe that on the weight."""
+    try:
+        torch._utils._flatten_dense_tensors([t.detach()])
+        return True
+    except Exception:
+        return False
+
+
 def _frozen_tensor_subclass_names_for_ddp(model, refuse_trainable = False):
     """Frozen tensor subclass weights (load_in_fp8's Float8Tensor) stay out of DDP: every rank loads and
     quantizes the same checkpoint, so there is nothing to broadcast, and a frozen weight has no gradient to
     reduce. A trainable one would need both, which DDP cannot do for it: refused when asked."""
     frozen, trainable = [], []
     for name, p in model.named_parameters():
-        if _is_tensor_subclass_weight(p):
-            (trainable if p.requires_grad else frozen).append(name)
+        if not _is_tensor_subclass_weight(p):
+            continue
+        if not p.requires_grad:
+            frozen.append(name)
+        elif _holds_float8(p) or not _ddp_can_flatten(p):
+            # FP8 storage, and weights DDP's broadcast cannot flatten (Int8Tensor, AffineQuantizedTensor),
+            # are refused: trainable subclasses that flatten (torchao's int8 mixed precision training
+            # weight, NF4Tensor) train as before.
+            trainable.append(name)
     if trainable and refuse_trainable:
         raise NotImplementedError(
             f"Unsloth: DDP cannot train the {type(model.get_parameter(trainable[0])).__name__} weight "
