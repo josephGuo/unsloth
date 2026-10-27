@@ -14447,13 +14447,16 @@ def _mlx_estimate_fitted_context(config, model_dir: str, load_in_4bit: bool, kv_
 
 
 def _mlx_estimate_offload(
-    request, config, model_dir: str, load_in_4bit: bool, kv_bits: Optional[int]
-) -> tuple[dict, tuple]:
-    """``({"offload": (ple, experts)} or {}, offloadable parts)`` for an MLX load of *request*,
-    "auto" decided as the load does, on its route; neither if the load quantizes, which unsloth_zoo
+    request, config, model_identifier, model_dir: str, load_in_4bit: bool, kv_bits: Optional[int]
+) -> tuple[dict, tuple, Optional[dict]]:
+    """``({"offload": (ple, experts)} or {}, offloadable parts, baseline route)`` for an MLX load of
+    *request*, "auto" decided as the load does, on its route, with the target-only route an auto
+    drafter's costless check measures against; none of them if the load quantizes, which unsloth_zoo
     refuses."""
+    from core.inference import mlx_speculative
     from core.inference.mlx_inference import (
-        mlx_resolve_offload,
+        mlx_offload_route,
+        mlx_resolve_drafter_offload,
         mlx_vlm_snapshot_store_available,
         normalize_mlx_offload,
     )
@@ -14463,19 +14466,28 @@ def _mlx_estimate_offload(
     if load_in_4bit and not (
         checkpoint.get("quantization") or checkpoint.get("quantization_config")
     ):
-        return {}, ()
+        return {}, (), None
     vision = True if _mlx_estimate_speculates(request, model_dir) else None
     try:
         parts = mlx_offloadable_parts(model_dir, vision)
     except Exception as exc:
         logger.info("MLX offload eligibility unknown for %s: %s", model_dir, exc)
         parts = ()
-    offload = mlx_resolve_offload(
+    drafter = vision and mlx_speculative.offload_drafter(
+        request.speculative_type,
+        request.spec_draft_model,
+        model_dir = model_dir,
+        target_name = model_identifier,
+        allowed = _discoverable_drafters(model_identifier),
+    )
+    offload, alone = mlx_resolve_drafter_offload(
         model_dir,
         (
             normalize_mlx_offload(request.mlx_ple_offload),
             normalize_mlx_offload(request.mlx_expert_offload),
         ),
+        drafter or None,
+        auto = mlx_speculative.mlx_spec_mode(request.speculative_type) == "auto",
         pinned = request.max_seq_length or None,
         load_in_4bit = load_in_4bit,
         # As the load: any mlx-vlm route, a speculative text load included, keeps no history without the store.
@@ -14488,7 +14500,8 @@ def _mlx_estimate_offload(
     )
     *offload, step = offload
     route = {"offload": tuple(offload)} if any(offload) else {}
-    return ({**route, "prefill_chunk": step} if step else route), parts
+    route = {**route, "prefill_chunk": step} if step else route
+    return route, parts, alone and mlx_offload_route(alone)
 
 
 def _mlx_offload_warning(info: dict) -> Optional[str]:
@@ -14531,6 +14544,7 @@ def _mlx_estimate_drafter(
     ceiling,
     load_in_4bit: bool,
     offload_route: Optional[dict] = None,
+    baseline: Optional[dict] = None,
 ):
     """``((path, builtin), fitted context, speculates)`` of an MLX load of *request*: the drafter it
     would attach, chosen as the load chooses it, and whether it speculates at all (so loads through mlx-vlm)."""
@@ -14555,6 +14569,7 @@ def _mlx_estimate_drafter(
             source,
             load_in_4bit = load_in_4bit,
             costless = mode == "auto",
+            baseline = baseline,
             **(offload_route or {}),
         )
         if attaches:
@@ -17787,12 +17802,9 @@ async def _managed_engine_request(request):
 
 
 def _managed_engine_unsupported_controls(payload, model_info = None) -> bool:
-    """A spelled-out ``{"type": "text"}`` response_format is the default, not structured output."""
     reasoning = (model_info or {}).get("reasoning_flags") is not None
     return bool(
         payload.use_adapter is not None
-        or _response_format_constrains_decoding(payload)
-        or payload.continue_final_message
         or (
             not reasoning
             and (
@@ -19107,11 +19119,11 @@ async def _load_model_impl(
         _close_load_event(
             _load_event, model_log_label if native_grant_backed else config.identifier, None
         )
-        # Clear the idle-unload stash so the next /v1 request doesn't resurrect an old GGUF.
+        # Consume the reload stash: an MLX swap's chat context is restored, anything else dropped.
         from core.inference.llama_keepwarm import note_model_loaded
 
         if replacing:
-            note_model_loaded()
+            await asyncio.to_thread(note_model_loaded, backend)
             account_access.publish_resident(
                 "chat",
                 request.model_path,
@@ -20483,8 +20495,8 @@ async def estimate_memory(
             if mlx_kv_bits is not None and mlx_kv_quant_is_refused(model_dir, mlx_kv_bits):
                 mlx_kv_bits = None
             mlx_named_ctx = request.max_seq_length or 0
-            mlx_offload, mlx_offloadable = _mlx_estimate_offload(
-                request, config, model_dir, mlx_load_in_4bit, mlx_kv_bits
+            mlx_offload, mlx_offloadable, mlx_offload_baseline = _mlx_estimate_offload(
+                request, config, model_identifier, model_dir, mlx_load_in_4bit, mlx_kv_bits
             )
             mlx_drafter, mlx_fitted_ctx, mlx_speculates = _mlx_estimate_drafter(
                 request,
@@ -20493,6 +20505,7 @@ async def estimate_memory(
                 _mlx_estimate_ceiling(model_dir),
                 mlx_load_in_4bit,
                 mlx_offload,
+                mlx_offload_baseline,
             )
             mlx_route = {**({"vision": True} if mlx_speculates else {}), **mlx_offload}
             if not mlx_named_ctx and mlx_drafter is None:
@@ -30313,7 +30326,8 @@ async def produce_openai_chat_completions(
             _explicit_studio_tool_loop_requested(payload)
             or not _tools_outrank_response_format(payload, payload.tools)
         ):
-            if not model_info.get("is_mlx"):
+            _engine_grammar = model_info.get("engine") in ("vllm", "sglang")
+            if not (model_info.get("is_mlx") or _engine_grammar):
                 _raise_unsupported_openai_parameter(
                     "response_format",
                     "response_format needs a grammar engine, and the transformers backend "
@@ -30333,9 +30347,10 @@ async def produce_openai_chat_completions(
                     "decoding starts a new document rather than continuing the text before "
                     "it. Send the turn without continue_final_message.",
                 )
-            await asyncio.get_running_loop().run_in_executor(
-                _SCHEMA_VALIDATION_EXECUTOR, _reject_unhonorable_response_format, payload
-            )
+            if not _engine_grammar:
+                await asyncio.get_running_loop().run_in_executor(
+                    _SCHEMA_VALIDATION_EXECUTOR, _reject_unhonorable_response_format, payload
+                )
 
         # ── Audio TTS path: auto-route to audio generation ────
         # Whisper is ASR, not TTS, so it skips this branch and is handled in the audio input path below.
@@ -32787,7 +32802,11 @@ async def produce_openai_chat_completions(
         if _managed_engine_unsupported_controls(payload, _sf_model_info):
             raise _reject(
                 400,
-                "This engine integration does not support adapters, structured output, continuation or reasoning controls.",
+                "This engine integration does not support adapters or reasoning controls.",
+            )
+        if _continue_final_message(payload, thought = True) and not _continue_final_message(payload):
+            raise _reject(
+                400, "This engine cannot resume a response that stopped mid-thought. Use Retry."
             )
         from routes.managed_engine_chat import managed_tool_chat
 
@@ -34706,13 +34725,12 @@ async def reveal_sandbox_dir(
     backend runs on the user's own machine, which is the desktop app.
     """
     await _authenticate_header_or_query(request, token)
+    # Like open: it drives the host's desktop, so only its owner may.
+    account_access.require_installation_owner()
 
     from starlette.concurrency import run_in_threadpool
 
     if file:
-        # Like open: it drives the host's desktop, so only its owner may.
-        account_access.require_installation_owner()
-
         from pathlib import Path
 
         from utils.paths.path_utils import reveal_in_file_manager
