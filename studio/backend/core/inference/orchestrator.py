@@ -403,6 +403,7 @@ def _mirrored_model_entry(model_info: dict, model_name: str) -> dict:
         "audio_type": model_info.get("audio_type"),
         "has_audio_input": model_info.get("has_audio_input", False),
         "has_video_input": model_info.get("has_video_input", False),
+        "speaks": model_info.get("speaks", False),
         "context_length": model_info.get("context_length"),
         "native_context_length": model_info.get("native_context_length"),
         "max_context_length": model_info.get("max_context_length"),
@@ -1390,7 +1391,7 @@ class InferenceOrchestrator:
         logit_bias: Optional[dict] = None,
         stop: Optional[list] = None,
         rows: Optional[list] = None,
-        video_b64: Optional[str] = None,
+        videos_b64: Optional[list[str]] = None,
         response_format: Optional[dict] = None,
         reasoning_is_extracted: bool = False,
         diffusion_frames: bool = False,
@@ -1426,8 +1427,8 @@ class InferenceOrchestrator:
         if response_format is not None:
             cmd["response_format"] = response_format
             cmd["reasoning_is_extracted"] = bool(reasoning_is_extracted)
-        if video_b64:
-            cmd["video_base64"] = video_b64
+        if videos_b64:
+            cmd["videos_base64"] = videos_b64
         if use_adapter is not None:
             cmd["use_adapter"] = use_adapter
         if tools is not None:
@@ -1557,6 +1558,9 @@ class InferenceOrchestrator:
                     yield int(resp.get("row", 0)), resp.get("text", "")
                 else:
                     yield resp.get("text", "")
+            elif rtype == "speech":
+                if rows is None and not stop_sent:
+                    yield {"speech": resp.get("speech"), "sample_rate": resp.get("sample_rate")}
             elif rtype == "diffusion_frame":
                 if frames and rows is None and not stop_sent:
                     yield {
@@ -1695,7 +1699,7 @@ class InferenceOrchestrator:
         stop: Optional[list] = None,
         rows: Optional[list] = None,
         expected_model: Optional[str] = None,
-        video: Optional[str] = None,
+        videos: Optional[list[str]] = None,
         response_format: Optional[dict] = None,
         reasoning_is_extracted: bool = False,
         diffusion_frames: bool = False,
@@ -1753,7 +1757,7 @@ class InferenceOrchestrator:
             tool_protocol_active = tool_protocol_active,
             seed = seed,
             rows = rows,
-            video_b64 = video,
+            videos_b64 = videos,
             diffusion_frames = diffusion_frames,
             prompt_ids = prompt_ids,
             penalty_window = penalty_window,
@@ -3193,7 +3197,7 @@ class InferenceOrchestrator:
         frequency_penalty: float = 0.0,
         logit_bias: Optional[dict] = None,
         stop: Optional[list] = None,
-        video: Optional[str] = None,
+        videos: Optional[list[str]] = None,
         response_format: Optional[dict] = None,
         reasoning_is_extracted: bool = False,
         diffusion_frames: bool = False,
@@ -3227,7 +3231,7 @@ class InferenceOrchestrator:
             stop = stop,
             response_format = response_format,
             reasoning_is_extracted = reasoning_is_extracted,
-            video = video,
+            videos = videos,
             diffusion_frames = diffusion_frames,
         )
 
@@ -3258,7 +3262,7 @@ class InferenceOrchestrator:
         frequency_penalty: float = 0.0,
         logit_bias: Optional[dict] = None,
         stop: Optional[list] = None,
-        video: Optional[str] = None,
+        videos: Optional[list[str]] = None,
         response_format: Optional[dict] = None,
         reasoning_is_extracted: bool = False,
     ) -> Generator[Any, None, None]:
@@ -3290,7 +3294,7 @@ class InferenceOrchestrator:
             logit_bias = logit_bias,
             stop = stop,
             rows = rows,
-            video = video,
+            videos = videos,
             response_format = response_format,
             reasoning_is_extracted = reasoning_is_extracted,
         )
@@ -3594,7 +3598,7 @@ class InferenceOrchestrator:
         logit_bias: Optional[dict] = None,
         stop: Optional[list] = None,
         rows: Optional[list] = None,
-        video: Optional[str] = None,
+        videos: Optional[list[str]] = None,
         response_format: Optional[dict] = None,
         reasoning_is_extracted: bool = False,
         diffusion_frames: bool = False,
@@ -3663,7 +3667,7 @@ class InferenceOrchestrator:
                 stop = stop,
                 rows = rows,
                 expected_model = expected_model,
-                video = video,
+                videos = videos,
                 response_format = response_format,
                 reasoning_is_extracted = reasoning_is_extracted,
                 diffusion_frames = diffusion_frames,
@@ -3711,7 +3715,7 @@ class InferenceOrchestrator:
                 tool_protocol_active = tool_protocol_active,
                 seed = seed,
                 rows = rows,
-                video_b64 = video,
+                videos_b64 = videos,
                 diffusion_frames = diffusion_frames,
                 prompt_ids = prompt_ids,
                 penalty_window = penalty_window,
@@ -4141,8 +4145,11 @@ class InferenceOrchestrator:
         stats_holder: Optional[dict] = None,
         stop = None,
         extra_audio_arrays: Optional[list] = None,
+        speak: bool = False,
+        tools: Optional[list] = None,
     ) -> Generator[str, None, None]:
-        """Audio input generation (e.g. Gemma 3n): streams text tokens."""
+        """Audio input generation (e.g. Gemma 3n): streams text tokens; with ``speak``, then one
+        ``{"speech", "sample_rate"}`` item carrying the spoken reply."""
         yield from self._generate_audio_input_inner(
             audio_array = audio_array,
             audio_type = None,  # worker uses generate_audio_input_response
@@ -4159,6 +4166,8 @@ class InferenceOrchestrator:
             stats_holder = stats_holder,
             stop = stop,
             extra_audio_arrays = extra_audio_arrays,
+            speak = speak,
+            tools = tools,
         )
 
     def _generate_audio_input_inner(
@@ -4178,6 +4187,8 @@ class InferenceOrchestrator:
         stats_holder: Optional[dict] = None,
         stop = None,
         extra_audio_arrays: Optional[list] = None,
+        speak: bool = False,
+        tools: Optional[list] = None,
     ) -> Generator[str, None, None]:
         """Shared inner logic for audio input generation (Whisper + ASR). ``stats_holder``: as in
         generate_chat_response, caller-owned and filled on gen_done with the worker's usage /
@@ -4223,6 +4234,10 @@ class InferenceOrchestrator:
                 cmd["use_adapter"] = use_adapter
             if stop:
                 cmd["stop"] = stop
+            if speak:
+                cmd["speak"] = True
+            if tools is not None:
+                cmd["tools"] = tools
 
             read_one, drain, release_mailbox = self._direct_reader(request_id, cancel_event)
             try:
