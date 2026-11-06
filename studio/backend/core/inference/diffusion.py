@@ -104,6 +104,7 @@ from .diffusion_compat import (
     speech_pick_refusal,
 )
 from .diffusion_device import (
+    apply_cpu_render_threads,
     DiffusionDeviceTarget,
     apply_diffusion_device_ordinal,
     diffusion_device_scope,
@@ -10936,7 +10937,7 @@ class DiffusionBackend:
                         except Exception:  # noqa: BLE001 - unpriced: the unconditional switch
                             plan_steps = None
                         plan = prefer_whole_module_offload(
-                            pipe, plan, logger = logger, steps = plan_steps
+                            pipe, plan, logger = logger, steps = plan_steps, family = fam.name
                         )
                         streamed_headroom = plan.estimates.get("measured_streamed_headroom_mib")
                         headroom = streamed_headroom or plan.estimates.get(
@@ -14134,6 +14135,7 @@ class DiffusionBackend:
             restore_eager_gate: Optional[Callable[[], None]] = None
             try:
                 self._state_device_target(state)
+                apply_cpu_render_threads(state.device)
                 # Local `state` keeps the pipe alive past unload() nulling _state; resolve (prompt, seed) jobs first.
                 jobs, seed = resolve_batch_jobs(
                     prompt = prompt,
