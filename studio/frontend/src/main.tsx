@@ -15,6 +15,10 @@ import {
   watchMathBlockContainmentOverride,
 } from "./components/assistant-ui/math-block-containment";
 import {
+  applyMessageRowContainment,
+  watchMessageRowContainmentOverride,
+} from "./components/assistant-ui/message-row-containment";
+import {
   applyReasoningRowContainment,
   watchReasoningRowContainmentOverride,
 } from "./components/assistant-ui/reasoning-row-containment";
@@ -38,9 +42,11 @@ import { watchClosingDialogFocus } from "./lib/closing-dialog-focus";
 import { setHubSessionRefresh } from "./lib/hf-endpoint";
 import { watchInputModality } from "./lib/input-modality";
 import { watchMacStrayKeyText } from "./lib/mac-stray-key-text";
+import { watchModalPointerLock } from "./lib/modal-pointer-lock";
 import { watchOverlayScrollbarGutter } from "./lib/overlay-scrollbar";
 import { pinPointerListenerRegions } from "./lib/pointer-listener-pin";
 import { watchSpellCheck } from "./lib/spellcheck";
+import { trustSurfaceRegistry } from "./lib/surface-registry";
 import { watchTimeFormat } from "./lib/time-format";
 
 markAppSessionStart();
@@ -60,6 +66,8 @@ const rootElement = document.getElementById("root");
 if (!rootElement) {
   throw new Error("Root element not found");
 }
+// Everything rendered into the root that a shortcut check looks for registers itself.
+trustSurfaceRegistry(rootElement);
 const root = createRoot(rootElement);
 
 if (isTauri) {
@@ -82,12 +90,15 @@ applyCodeBlockContainment();
 watchCodeBlockContainmentOverride();
 applyReasoningRowContainment();
 watchReasoningRowContainmentOverride();
+applyMessageRowContainment();
+watchMessageRowContainmentOverride();
 
 watchOverlayScrollbarGutter(window);
 watchInputModality(window);
 // Before any panel group mounts: their document pointer listeners then never change WebKit's page-wide set.
 pinPointerListenerRegions(document);
 watchClosingDialogFocus(document);
+watchModalPointerLock(document);
 
 watchSpellCheck(window);
 watchTimeFormat(window);
