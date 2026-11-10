@@ -7,6 +7,7 @@ streamed."""
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any, Optional
 
@@ -627,6 +628,8 @@ class H3Residency:
         # bytes of slabs the last ``apply`` compacted; a compaction that could not fit every slab retries next re-fit
         self.compacted_bytes = 0
         self.compact_pending = False
+        # video_minimax_h3_te.H3TeDeviceShare
+        self.te_share: Any = None
 
     @property
     def usable(self) -> bool:
@@ -643,6 +646,17 @@ class H3Residency:
     def resident_bytes(self) -> int:
         total = self.top_bytes if (self.top is not None and is_resident(self.top)) else 0
         return total + sum(b for g, b in zip(self.blocks, self.block_bytes) if is_resident(g))
+
+    def device_bytes(self) -> int:
+        te = getattr(self, "te_share", None)
+        return self.resident_bytes() + (te.resident_bytes() if te is not None else 0)
+
+    def te_budget(self, budget_bytes: int, top: bool, n: int) -> int:
+        """Zero unless the whole denoiser is resident: it is read every step, the conditioner once."""
+        if n < len(self.blocks) or (self.top is not None and not top):
+            return 0
+        planned = (self.top_bytes if top else 0) + sum(self.block_bytes[:n])
+        return max(0, int(budget_bytes) - planned)
 
     def plan(
         self,
@@ -704,7 +718,21 @@ class H3Residency:
     ) -> tuple[bool, int]:
         """Re-fit the resident set to ``budget_bytes`` (the device bytes the resident set may occupy)."""
         top, n = self.plan(budget_bytes)
+        te = getattr(self, "te_share", None)
+        te_left = self.te_budget(budget_bytes, top, n) if te is not None else 0
+        te_n = te.plan(te_left) if te is not None else 0
+        if te is not None:
+            # the conditioner gives its share back before any denoiser block is promoted
+            te.shrink(te_n)
         self.apply(top, n)
+        if te is not None:
+            try:
+                te.grow(te_n)
+            except Exception as exc:  # noqa: BLE001 -- the conditioner streams as before
+                te.shrink(0)
+                if self.logger is not None:
+                    self.logger.warning("video.h3_te_resident_device: staying streamed: %s", exc)
+            te.report(te_left, force = initial)
         if initial:
             self.max_blocks = n
         released = getattr(self, "released_bytes", 0)
@@ -738,6 +766,13 @@ def release_all(residency: "H3Residency", *, logger: Any = None) -> None:
     """Return every group of ``residency`` to streaming, including one whose onload failed partway. Never raises."""
     import torch
 
+    te = getattr(residency, "te_share", None)
+    if te is not None:
+        try:
+            te.shrink(0)
+        except Exception as exc:  # noqa: BLE001
+            if logger is not None:
+                logger.warning("video.h3_te_resident_device: could not release the share: %s", exc)
     groups = list(reversed(residency.blocks))
     if residency.top is not None:
         groups.append(residency.top)
@@ -1447,3 +1482,111 @@ def install_pinned_swap(
             sum(t.numel() * t.element_size() for t in host.values()) / 1e9,
         )
     return True
+
+
+H3_ROTATION_PARK_ENV = "UNSLOTH_H3_ROTATION_PARK"
+_PARK_ATTR = "_unsloth_h3_rotation_park"
+_COMPONENTS_MANAGER_LOGGER = "diffusers.modular_pipelines.components_manager"
+_FALLBACK_WARNING = "no combination of models to offload to cpu is found"
+
+
+def h3_rotation_park_enabled() -> bool:
+    return str(os.environ.get(H3_ROTATION_PARK_ENV, "")).strip().lower() not in (
+        "0",
+        "off",
+        "false",
+        "no",
+    )
+
+
+class _DropFallbackWarning(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            return _FALLBACK_WARNING not in record.getMessage()
+        except Exception:  # noqa: BLE001 -- an unformattable record is not ours to drop
+            return True
+
+
+class H3QuietOffloadStrategy:
+    """The wrapped strategy, minus its "offloading all models" warning (evict-all is this tier's policy)."""
+
+    def __init__(self, inner: Any) -> None:
+        self.inner = inner
+
+    def __getattr__(self, name: str) -> Any:
+        inner = self.__dict__.get("inner")
+        if inner is None:
+            raise AttributeError(name)
+        return getattr(inner, name)
+
+    def __call__(self, hooks: Any, model_id: Any, model: Any, execution_device: Any) -> Any:
+        log = logging.getLogger(_COMPONENTS_MANAGER_LOGGER)
+        quiet = _DropFallbackWarning()
+        log.addFilter(quiet)
+        try:
+            return self.inner(
+                hooks = hooks, model_id = model_id, model = model, execution_device = execution_device
+            )
+        finally:
+            log.removeFilter(quiet)
+
+
+def install_h3_rotation_park(
+    pipe: Any,
+    *,
+    park: bool,
+    logger: Any = None,
+) -> bool:
+    """Streamed tiers only. ``park`` (streamed denoiser): evict the rotation when a render returns, not at the next
+    forward, so the next request's VRAM floor stops counting the last decode's audio VAE."""
+    if pipe is None or not h3_rotation_park_enabled():
+        return False
+    manager = getattr(pipe, "_components_manager", None)
+    hooks = list(getattr(manager, "model_hooks", None) or ())
+    if not hooks or getattr(manager, "_auto_offload_device", None) is None:
+        return False
+    wrapped: dict[int, Any] = {}
+
+    def _quiet(strategy: Any) -> Any:
+        if strategy is None or isinstance(strategy, H3QuietOffloadStrategy):
+            return strategy
+        if id(strategy) not in wrapped:
+            wrapped[id(strategy)] = H3QuietOffloadStrategy(strategy)
+        return wrapped[id(strategy)]
+
+    for hook in hooks:
+        inner = getattr(hook, "hook", None)
+        if inner is not None and hasattr(inner, "offload_strategy"):
+            inner.offload_strategy = _quiet(inner.offload_strategy)
+    if hasattr(manager, "_offload_strategy"):
+        manager._offload_strategy = _quiet(manager._offload_strategy)
+    setattr(pipe, _PARK_ATTR, bool(park))
+    if logger is not None:
+        logger.info(
+            "video.h3_rotation: evicting every resident component is this tier's policy, so the diffusers "
+            "fallback warning is muted; %s %s (%s=0 keeps both as before)",
+            ", ".join(str(getattr(hook, "model_id", "?")) for hook in hooks),
+            "park on the host when a render returns, so the next request's VRAM floor and resident set see that "
+            "room free"
+            if park
+            else "stay until they are evicted (the conditioner's pre-hook may be skipped by a prompt-cache hit)",
+            H3_ROTATION_PARK_ENV,
+        )
+    return True
+
+
+def park_h3_rotation(pipe: Any) -> bool:
+    """Evict resident rotating components (the pre-hooks' own eviction); never raises."""
+    if pipe is None or not getattr(pipe, _PARK_ATTR, False):
+        return False
+    try:
+        manager = getattr(pipe, "_components_manager", None)
+        device = getattr(manager, "_auto_offload_device", None)
+        if manager is None or device is None:
+            return False
+        from .diffusion_prequant import _evict_rotation_hook
+
+        _evict_rotation_hook(manager, device)(None, None)
+        return True
+    except Exception:  # noqa: BLE001 -- the next render's pre-hook evicts them as before
+        return False
