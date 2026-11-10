@@ -319,6 +319,7 @@ from .diffusion_speed import (
     normalize_speed_mode,
     resolve_speed_mode,
     family_render_cudnn_scope,
+    release_rocm_tunableop as _release_rocm_tunableop,
     restore_backend_flags,
     settle_compile_fallback,
     snapshot_backend_flags,
@@ -547,6 +548,7 @@ from .diffusion_transformer_quant import (
     nvfp4_gated_base,
     native_int8_act,
     rdna_auto_w8a8_reason,
+    rdna_explicit_int8_reason,
     native_offload_host,
     native_quant_host,
     native_quant_scheme,
@@ -8709,6 +8711,21 @@ class DiffusionBackend:
                         rdna_auto_w8a8,
                     )
                     transformer_quant = TQ_INT8
+                # An explicit int8 request compiles from render 1 when the denoiser stays resident; W8A8 only where the
+                # family's AUTO table measured it faster (weight-only int8 elsewhere).
+                rdna_explicit_int8 = (
+                    rdna_explicit_int8_reason(target, getattr(fam, "name", None))
+                    if rdna_auto_w8a8 is None
+                    and transformer_quant_pinned == TQ_INT8
+                    and kind == "pipeline"
+                    and not _memory_request_forces_offload(memory_mode, cpu_offload)
+                    and (
+                        speed_mode is None
+                        or normalize_speed_mode(speed_mode) in (SPEED_DEFAULT, SPEED_MAX)
+                    )
+                    and compile_eligible(target, is_gguf = False, family = fam, probe = False)
+                    else None
+                )
                 native_scheme = (
                     native_quant_scheme(
                         target,
@@ -10468,6 +10485,9 @@ class DiffusionBackend:
                                     plan.offload_policy,
                                 )
                             inplace_decline = None
+                            if rdna_explicit_int8 is not None and not keeps_resident:
+                                # Measured resident only: an offloaded int8 DiT keeps the eager weight-only path.
+                                rdna_explicit_int8 = None
                             if rdna_auto_w8a8 is not None and not keeps_resident:
                                 # Measured resident only: AUTO keeps bf16 when even the int8 plan offloads.
                                 native_scheme = rdna_auto_w8a8 = None
@@ -10527,7 +10547,17 @@ class DiffusionBackend:
                                     {
                                         "offload": plan.offload_policy != OFFLOAD_NONE,
                                         "act_int8": native_scheme == TQ_INT8
-                                        and (native_int8_act(target) or rdna_auto_w8a8 is not None),
+                                        and (
+                                            native_int8_act(target)
+                                            or rdna_auto_w8a8 is not None
+                                            or (
+                                                rdna_explicit_int8 is not None
+                                                and rdna_auto_w8a8_reason(
+                                                    target, getattr(fam, "name", None)
+                                                )
+                                                is not None
+                                            )
+                                        ),
                                     }
                                     if native_scheme is not None
                                     else {}
@@ -10704,14 +10734,14 @@ class DiffusionBackend:
                         )
                         effective_speed = SPEED_DEFAULT
                     if (
-                        rdna_auto_w8a8 is not None
+                        (rdna_auto_w8a8 is not None or rdna_explicit_int8 is not None)
                         and transformer_quant_engaged is not None
                         and speed_mode is None
                         and effective_speed == SPEED_OFF
                         and compile_eligible(target, is_gguf = False, family = fam, probe = False)
                     ):
                         logger.info(
-                            "diffusion.speed: speed_mode=default from render 1 (auto int8 W8A8 on RDNA is "
+                            "diffusion.speed: speed_mode=default from render 1 (int8 on RDNA is "
                             "measured compiled)"
                         )
                         effective_speed = SPEED_DEFAULT
@@ -11625,6 +11655,7 @@ class DiffusionBackend:
                             load_bg_compile.close()
                             load_bg_compile = None
                         restore_backend_flags(backend_flags_before)
+                        _release_rocm_tunableop(pipe)
                         compile_cache.restore(compile_ctx, logger = logger)
                         gguf_compile.uninstall_all()  # idempotent
                         cuda_graph.uninstall_all(getattr(pipe, "_unsloth_cuda_graphs", ()) or ())
@@ -15956,6 +15987,7 @@ class DiffusionBackend:
                 pass
         # Restore process-wide backend flags so the next `off` load is bit-identical; all calls idempotent.
         restore_backend_flags(state.backend_flags_before)
+        _release_rocm_tunableop(state.pipe)
         prebuild = sys.modules.get(f"{__package__}.diffusion_vae_prebuild")
         if prebuild is not None:
             prebuild.cancel_all()
