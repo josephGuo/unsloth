@@ -721,6 +721,9 @@ _FAMILIES: tuple[DiffusionFamily, ...] = (
             preview_factors = "flux2",
         ),
         pipeline_class = "Flux3ModularPipeline",
+        # As FLUX.2 Klein: per-process reduction-config / cuDNN picks moved one seed 0.003-0.007 LPIPS on L4.
+        filter_reduction_configs = True,
+        cudnn_benchmark = False,
         # Same layout as the distilled repo. The INT8 file is BFL's own ComfyUI int8_convrot denoiser
         # (black-forest-labs/flux-3-image-klein-comfy, byte-identical), which scored better than an INT8 built with
         # the keep-list, so the prequant loader reads it through the ComfyUI quant path. The FP8 file is Studio's own.
@@ -795,6 +798,9 @@ _FAMILIES: tuple[DiffusionFamily, ...] = (
             preview_factors = "flux2",
         ),
         pipeline_class = "Flux3DistilledModularPipeline",
+        # As FLUX.2 Klein: per-process reduction-config / cuDNN picks moved one seed 0.003-0.007 LPIPS on L4.
+        filter_reduction_configs = True,
+        cudnn_benchmark = False,
         # Pre-quantized distilled denoisers (both schemes in one repo, as FLUX.2 klein), built with the keep-list above;
         # the loader checks the stored exclude set against it. The base has its own repo.
         prequant_repos = (
@@ -1525,7 +1531,7 @@ _FAMILIES: tuple[DiffusionFamily, ...] = (
         prequant_excluded_bases = ("openmoss-team/moss-image-base",),
         # Qwen3.5-9B int8 ConvRot: LPIPS 0.059 vs bf16; without the hosted file auto keeps bf16.
         te_quant_auto = "int8",
-        aliases = ("moss-image-sft", "moss-image-base", "mossimage", "moss_image"),
+        aliases = ("moss-image-sft", "moss-image-base", "mossimage", "moss_image", "kromoss"),
         prompt_hint = (
             "MOSS-Image reads plain captions, tag lists or JSON layouts; raise CFG (3 to 6) for short prompts."
         ),
@@ -2374,6 +2380,7 @@ _GENERATION_DEFAULTS: tuple[tuple[str, int, float], ...] = (
     ("moss-image", 25, 2.5),
     ("moss_image", 25, 2.5),
     ("mossimage", 25, 2.5),
+    ("kromoss", 25, 2.5),
     # SDXL-Turbo: 1 step, CFG 1. "sdxl-turbo" must precede "sdxl".
     ("sdxl-turbo", 1, 0.0),
     ("stable-diffusion-xl", 25, 7.0),
