@@ -639,6 +639,15 @@ def _run_llama_cpp_startup_probes(app: FastAPI) -> None:
         _bin = LlamaCppBackend._find_llama_server_binary()
         _caps = LlamaCppBackend.probe_server_capabilities(_bin)
         app.state.llama_cpp_capabilities = _caps
+        # Warm the --version cache read by the first GGUF load.
+        if _caps.get("found"):
+            try:
+                LlamaCppBackend.probe_build_number(_bin)
+            except Exception as _build_exc:
+                import structlog as _structlog
+                _structlog.get_logger(__name__).debug(
+                    "llama.cpp build probe failed: %s", _build_exc
+                )
         _freshness = check_prebuilt_freshness(_bin)
         app.state.llama_cpp_freshness = _freshness
 
@@ -1815,8 +1824,7 @@ async def _send_411(send) -> None:
 
 
 async def _send_401(send) -> None:
-    # The status and detail the route's own auth check gives an expired or missing token, so the
-    # frontend refreshes its session exactly as it would have.
+    # Same 401 and detail as the route's own auth check, so the frontend refreshes its session.
     payload = _json_for_413.dumps({"detail": "Invalid or expired token"}).encode("utf-8")
     await send(
         {
