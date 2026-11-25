@@ -986,11 +986,18 @@ export const pl = {
   chatMenu: {
     more: "Opcje czatu",
     copy: "Kopiuj",
-    addScheduledTask: "Dodaj zaplanowane zadanie…",
+    addScheduledTask: "Dodaj zaplanowane zadanie",
     compact: "Kompaktuj rozmowę",
     compactEmpty: "Nie ma jeszcze czego kompaktować",
     compactUnsupported:
       "Kompaktowanie wymaga modelu GGUF lub MLX z obsługą narzędzi",
+  },
+  chatFiles: {
+    title: "Pliki w tym czacie",
+    code: "Fragmenty kodu",
+    showInChat: "Pokaż w czacie",
+    download: "Pobierz {name}",
+    saveFailed: "Nie udało się zapisać {name}.",
   },
   welcome: {
     goodToSeeYou: "Miło Cię widzieć",
@@ -1075,6 +1082,7 @@ export const pl = {
     saving: "Zapisywanie...",
     search: "Szukaj",
     shutdown: "Zamknij",
+    technicalDetails: "Szczegóły techniczne",
   },
   shell: {
     helpMenu: {
@@ -5422,6 +5430,7 @@ export const pl = {
     model: {
       label: "Model tłumaczenia",
       fast: "Szybki",
+      balanced: "Zrównoważony",
       quality: "Najlepsza jakość",
       chat: "Model czatu",
       recommended: "Polecane",
@@ -5443,7 +5452,7 @@ export const pl = {
       toneFormal: "Formalny",
       toneCasual: "Swobodny",
       auto: "Tłumacz podczas pisania",
-      autoDescription: "Zaczyna działać po wczytaniu modelu. Pisanie nigdy nie rozpoczyna pobierania.",
+      autoDescription: "Uruchamia się automatycznie po załadowaniu modelu.",
       saveHistory: "Zapisuj historię",
       saveHistoryDescription: "Przechowywana tylko w tej przeglądarce.",
       showPrompt: "Pokaż prompt",
@@ -6578,7 +6587,6 @@ export const pl = {
     back: "Wstecz",
     continue: "Dalej",
     skipSetup: "Pomiń konfigurację",
-    outsideAgain: "Kliknij ponownie poza oknem, aby zamknąć",
     getStarted: "Zaczynajmy",
     progress: "Krok {current} z {total}",
     welcome: {

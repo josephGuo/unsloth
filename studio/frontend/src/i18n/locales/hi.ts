@@ -882,10 +882,17 @@ export const hi = {
   chatMenu: {
     more: "चैट विकल्प",
     copy: "कॉपी करें",
-    addScheduledTask: "शेड्यूल किया गया कार्य जोड़ें…",
+    addScheduledTask: "शेड्यूल किया गया कार्य जोड़ें",
     compact: "बातचीत कॉम्पैक्ट करें",
     compactEmpty: "अभी कॉम्पैक्ट करने के लिए कुछ नहीं है",
     compactUnsupported: "कॉम्पैक्शन के लिए टूल सपोर्ट वाला GGUF या MLX मॉडल आवश्यक है",
+  },
+  chatFiles: {
+    title: "इस चैट की फ़ाइलें",
+    code: "कोड स्निपेट",
+    showInChat: "चैट में दिखाएँ",
+    download: "{name} डाउनलोड करें",
+    saveFailed: "{name} सहेजा नहीं जा सका।",
   },
   welcome: {
     goodToSeeYou: "आपको देखकर अच्छा लगा",
@@ -970,6 +977,7 @@ export const hi = {
     saving: "सहेजा जा रहा है...",
     search: "खोजें",
     shutdown: "शटडाउन",
+    technicalDetails: "तकनीकी विवरण",
   },
   shell: {
     helpMenu: {
@@ -5042,6 +5050,7 @@ export const hi = {
     model: {
       label: "अनुवाद मॉडल",
       fast: "तेज़",
+      balanced: "संतुलित",
       quality: "सर्वोत्तम गुणवत्ता",
       chat: "चैट मॉडल",
       recommended: "सुझाए गए",
@@ -5063,7 +5072,7 @@ export const hi = {
       toneFormal: "औपचारिक",
       toneCasual: "अनौपचारिक",
       auto: "टाइप करते ही अनुवाद करें",
-      autoDescription: "मॉडल लोड होने के बाद शुरू होता है। टाइप करने से कभी डाउनलोड शुरू नहीं होता।",
+      autoDescription: "मॉडल लोड होने पर अपने-आप शुरू होता है।",
       saveHistory: "हिस्ट्री सहेजें",
       saveHistoryDescription: "सिर्फ़ इसी ब्राउज़र में रखी जाती है।",
       showPrompt: "प्रॉम्प्ट दिखाएँ",
@@ -6129,7 +6138,6 @@ export const hi = {
     back: "वापस",
     continue: "जारी रखें",
     skipSetup: "सेटअप छोड़ें",
-    outsideAgain: "बंद करने के लिए फिर से बाहर क्लिक करें",
     getStarted: "शुरू करें",
     progress: "चरण {current} / {total}",
     welcome: {

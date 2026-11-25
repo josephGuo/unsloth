@@ -882,10 +882,17 @@ export const de = {
   chatMenu: {
     more: "Chat-Optionen",
     copy: "Kopieren",
-    addScheduledTask: "Geplante Aufgabe hinzufügen…",
+    addScheduledTask: "Geplante Aufgabe hinzufügen",
     compact: "Unterhaltung komprimieren",
     compactEmpty: "Noch nichts zu komprimieren",
     compactUnsupported: "Die Komprimierung erfordert ein GGUF- oder MLX-Modell mit Tool-Unterstützung",
+  },
+  chatFiles: {
+    title: "Dateien in diesem Chat",
+    code: "Code-Schnipsel",
+    showInChat: "Im Chat anzeigen",
+    download: "{name} herunterladen",
+    saveFailed: "{name} konnte nicht gespeichert werden.",
   },
   welcome: {
     goodToSeeYou: "Schön, dich zu sehen",
@@ -970,6 +977,7 @@ export const de = {
     saving: "Wird gespeichert…",
     search: "Suchen",
     shutdown: "Herunterfahren",
+    technicalDetails: "Technische Details",
   },
   shell: {
     helpMenu: {
@@ -5105,6 +5113,7 @@ export const de = {
     model: {
       label: "Übersetzungsmodell",
       fast: "Schnell",
+      balanced: "Ausgewogen",
       quality: "Beste Qualität",
       chat: "Chat-Modell",
       recommended: "Empfohlen",
@@ -5126,11 +5135,11 @@ export const de = {
       toneFormal: "Förmlich",
       toneCasual: "Locker",
       auto: "Beim Tippen übersetzen",
-      autoDescription: "Startet, sobald das Modell geladen ist. Tippen löst nie einen Download aus.",
+      autoDescription: "Startet automatisch, sobald das Modell geladen ist.",
       saveHistory: "Verlauf speichern",
       saveHistoryDescription: "Wird nur in diesem Browser gespeichert.",
       showPrompt: "Prompt anzeigen",
-      showPromptDescription: "Zeigt die genauen Anweisungen, die an das Modell gesendet werden.",
+      showPromptDescription: "Genaue Anweisungen an das Modell anzeigen.",
     },
     history: {
       title: "Verlauf",
@@ -6192,7 +6201,6 @@ export const de = {
     back: "Zurück",
     continue: "Weiter",
     skipSetup: "Einrichtung überspringen",
-    outsideAgain: "Zum Schließen erneut außerhalb klicken",
     getStarted: "Los geht’s",
     progress: "Schritt {current} von {total}",
     welcome: {

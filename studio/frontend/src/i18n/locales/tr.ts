@@ -974,11 +974,18 @@ export const tr = {
   chatMenu: {
     more: "Sohbet seçenekleri",
     copy: "Kopyala",
-    addScheduledTask: "Zamanlanmış görev ekle…",
+    addScheduledTask: "Zamanlanmış görev ekle",
     compact: "Konuşmayı sıkıştır",
     compactEmpty: "Henüz sıkıştırılacak bir şey yok",
     compactUnsupported:
       "Sıkıştırma için araç desteği olan bir GGUF veya MLX modeli gerekir",
+  },
+  chatFiles: {
+    title: "Bu sohbetteki dosyalar",
+    code: "Kod parçacıkları",
+    showInChat: "Sohbette göster",
+    download: "{name} dosyasını indir",
+    saveFailed: "{name} kaydedilemedi.",
   },
   welcome: {
     goodToSeeYou: "Sizi görmek güzel",
@@ -1064,6 +1071,7 @@ export const tr = {
     saving: "Kaydediliyor...",
     search: "Ara",
     shutdown: "Kapat",
+    technicalDetails: "Teknik ayrıntılar",
   },
   shell: {
     helpMenu: {
@@ -5371,6 +5379,7 @@ export const tr = {
     model: {
       label: "Çeviri modeli",
       fast: "Hızlı",
+      balanced: "Dengeli",
       quality: "En iyi kalite",
       chat: "Sohbet modeli",
       recommended: "Önerilen",
@@ -5392,11 +5401,11 @@ export const tr = {
       toneFormal: "Resmi",
       toneCasual: "Samimi",
       auto: "Yazarken çevir",
-      autoDescription: "Model yüklendikten sonra başlar. Yazmak hiçbir zaman indirme başlatmaz.",
+      autoDescription: "Model yüklendiğinde otomatik olarak başlar.",
       saveHistory: "Geçmişi kaydet",
       saveHistoryDescription: "Yalnızca bu tarayıcıda saklanır.",
       showPrompt: "İstemi göster",
-      showPromptDescription: "Modele gönderilen talimatları aynen görün.",
+      showPromptDescription: "Modele gönderilen talimatların tam halini görün.",
     },
     history: {
       title: "Geçmiş",
@@ -6522,7 +6531,6 @@ export const tr = {
     back: "Geri",
     continue: "Devam",
     skipSetup: "Kurulumu atla",
-    outsideAgain: "Kapatmak için dışarıya tekrar tıklayın",
     getStarted: "Başlayın",
     progress: "Adım {current} / {total}",
     welcome: {

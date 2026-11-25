@@ -985,11 +985,18 @@ export const es419 = {
   chatMenu: {
     more: "Opciones del chat",
     copy: "Copiar",
-    addScheduledTask: "Agregar tarea programada…",
+    addScheduledTask: "Agregar tarea programada",
     compact: "Compactar conversación",
     compactEmpty: "Aún no hay nada que compactar",
     compactUnsupported:
       "La compactación requiere un modelo GGUF o MLX compatible con herramientas",
+  },
+  chatFiles: {
+    title: "Archivos en este chat",
+    code: "Fragmentos de código",
+    showInChat: "Mostrar en el chat",
+    download: "Descargar {name}",
+    saveFailed: "No se pudo guardar {name}.",
   },
   welcome: {
     goodToSeeYou: "Me alegra verte",
@@ -1074,6 +1081,7 @@ export const es419 = {
     saving: "Guardando...",
     search: "Buscar",
     shutdown: "Apagar",
+    technicalDetails: "Detalles técnicos",
   },
   shell: {
     helpMenu: {
@@ -5456,6 +5464,7 @@ export const es419 = {
     model: {
       label: "Modelo de traducción",
       fast: "Rápido",
+      balanced: "Equilibrado",
       quality: "Mejor calidad",
       chat: "Modelo de chat",
       recommended: "Recomendados",
@@ -6621,7 +6630,6 @@ export const es419 = {
     back: "Atrás",
     continue: "Continuar",
     skipSetup: "Omitir configuración",
-    outsideAgain: "Haz clic afuera otra vez para cerrar",
     getStarted: "Comenzar",
     progress: "Paso {current} de {total}",
     welcome: {

@@ -980,11 +980,18 @@ export const vi = {
   chatMenu: {
     more: "Tùy chọn cuộc trò chuyện",
     copy: "Sao chép",
-    addScheduledTask: "Thêm tác vụ đã lên lịch…",
+    addScheduledTask: "Thêm tác vụ đã lên lịch",
     compact: "Thu gọn cuộc trò chuyện",
     compactEmpty: "Chưa có gì để thu gọn",
     compactUnsupported:
       "Cần mô hình GGUF hoặc MLX có hỗ trợ công cụ để thu gọn",
+  },
+  chatFiles: {
+    title: "Tệp trong cuộc trò chuyện này",
+    code: "Đoạn mã",
+    showInChat: "Hiển thị trong cuộc trò chuyện",
+    download: "Tải xuống {name}",
+    saveFailed: "Không thể lưu {name}.",
   },
   welcome: {
     goodToSeeYou: "Rất vui được gặp bạn",
@@ -1069,6 +1076,7 @@ export const vi = {
     saving: "Đang lưu...",
     search: "Tìm kiếm",
     shutdown: "Tắt",
+    technicalDetails: "Chi tiết kỹ thuật",
   },
   shell: {
     helpMenu: {
@@ -5369,6 +5377,7 @@ export const vi = {
     model: {
       label: "Mô hình dịch",
       fast: "Nhanh",
+      balanced: "Cân bằng",
       quality: "Chất lượng tốt nhất",
       chat: "Mô hình trò chuyện",
       recommended: "Đề xuất",
@@ -5390,11 +5399,11 @@ export const vi = {
       toneFormal: "Trang trọng",
       toneCasual: "Thân mật",
       auto: "Dịch khi bạn nhập",
-      autoDescription: "Bắt đầu sau khi mô hình được tải. Việc nhập không bao giờ kích hoạt tải xuống.",
+      autoDescription: "Tự động bắt đầu khi mô hình đã được tải.",
       saveHistory: "Lưu lịch sử",
       saveHistoryDescription: "Chỉ lưu trong trình duyệt này.",
       showPrompt: "Hiển thị lời nhắc",
-      showPromptDescription: "Xem chính xác hướng dẫn được gửi đến mô hình.",
+      showPromptDescription: "Xem hướng dẫn chính xác được gửi đến mô hình.",
     },
     history: {
       title: "Lịch sử",
@@ -6525,7 +6534,6 @@ export const vi = {
     back: "Quay lại",
     continue: "Tiếp tục",
     skipSetup: "Bỏ qua thiết lập",
-    outsideAgain: "Nhấp ra ngoài lần nữa để đóng",
     getStarted: "Bắt đầu",
     progress: "Bước {current}/{total}",
     welcome: {

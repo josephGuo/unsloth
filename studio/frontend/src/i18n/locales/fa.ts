@@ -976,11 +976,18 @@ export const fa = {
   chatMenu: {
     more: "گزینه‌های گفتگو",
     copy: "کپی",
-    addScheduledTask: "افزودن کار زمان‌بندی‌شده…",
+    addScheduledTask: "افزودن کار زمان‌بندی‌شده",
     compact: "فشرده‌سازی گفتگو",
     compactEmpty: "هنوز چیزی برای فشرده‌سازی وجود ندارد",
     compactUnsupported:
       "فشرده‌سازی به یک مدل GGUF یا MLX با پشتیبانی از ابزار نیاز دارد",
+  },
+  chatFiles: {
+    title: "فایل‌های این گفتگو",
+    code: "قطعه‌کدها",
+    showInChat: "نمایش در گفتگو",
+    download: "دانلود {name}",
+    saveFailed: "ذخیرهٔ {name} ممکن نشد.",
   },
   welcome: {
     goodToSeeYou: "از دیدنتان خوشحالیم",
@@ -1062,6 +1069,7 @@ export const fa = {
     saving: "در حال ذخیره...",
     search: "جستجو",
     shutdown: "خاموش کردن",
+    technicalDetails: "جزئیات فنی",
   },
   shell: {
     helpMenu: {
@@ -5346,6 +5354,7 @@ export const fa = {
     model: {
       label: "مدل ترجمه",
       fast: "سریع",
+      balanced: "متعادل",
       quality: "بهترین کیفیت",
       chat: "مدل گفتگو",
       recommended: "پیشنهادی",
@@ -5367,13 +5376,11 @@ export const fa = {
       toneFormal: "رسمی",
       toneCasual: "غیررسمی",
       auto: "ترجمه هنگام تایپ",
-      autoDescription:
-        "پس از بارگذاری مدل شروع می‌شود. تایپ کردن هرگز دانلودی را شروع نمی‌کند.",
+      autoDescription: "وقتی مدل بارگذاری شد، خودکار شروع می‌شود.",
       saveHistory: "ذخیرهٔ سابقه",
       saveHistoryDescription: "فقط در همین مرورگر نگهداری می‌شود.",
       showPrompt: "نمایش پرامپت",
-      showPromptDescription:
-        "دستورهای دقیقی را که برای مدل فرستاده می‌شود ببینید.",
+      showPromptDescription: "دستورالعمل‌های دقیق ارسال‌شده به مدل را ببینید.",
     },
     history: {
       title: "سابقه",
@@ -6501,7 +6508,6 @@ export const fa = {
     back: "بازگشت",
     continue: "ادامه",
     skipSetup: "رد شدن از راه‌اندازی",
-    outsideAgain: "برای بستن، دوباره بیرون کلیک کنید",
     getStarted: "شروع کنید",
     progress: "مرحلهٔ {current} از {total}",
     welcome: {

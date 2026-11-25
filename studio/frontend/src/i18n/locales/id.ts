@@ -978,11 +978,18 @@ export const id = {
   chatMenu: {
     more: "Opsi chat",
     copy: "Salin",
-    addScheduledTask: "Tambahkan tugas terjadwal…",
+    addScheduledTask: "Tambahkan tugas terjadwal",
     compact: "Padatkan percakapan",
     compactEmpty: "Belum ada yang dapat dipadatkan",
     compactUnsupported:
       "Pemadatan memerlukan model GGUF atau MLX yang mendukung alat",
+  },
+  chatFiles: {
+    title: "File di obrolan ini",
+    code: "Cuplikan kode",
+    showInChat: "Tampilkan di obrolan",
+    download: "Unduh {name}",
+    saveFailed: "Tidak dapat menyimpan {name}.",
   },
   welcome: {
     goodToSeeYou: "Senang bertemu Anda",
@@ -1068,6 +1075,7 @@ export const id = {
     saving: "Menyimpan...",
     search: "Cari",
     shutdown: "Matikan",
+    technicalDetails: "Detail teknis",
   },
   shell: {
     helpMenu: {
@@ -5374,6 +5382,7 @@ export const id = {
     model: {
       label: "Model terjemahan",
       fast: "Cepat",
+      balanced: "Seimbang",
       quality: "Kualitas terbaik",
       chat: "Model chat",
       recommended: "Direkomendasikan",
@@ -5395,7 +5404,7 @@ export const id = {
       toneFormal: "Formal",
       toneCasual: "Santai",
       auto: "Terjemahkan saat mengetik",
-      autoDescription: "Dimulai setelah model dimuat. Mengetik tidak pernah memulai unduhan.",
+      autoDescription: "Mulai otomatis saat model dimuat.",
       saveHistory: "Simpan riwayat",
       saveHistoryDescription: "Hanya disimpan di browser ini.",
       showPrompt: "Tampilkan prompt",
@@ -6527,7 +6536,6 @@ export const id = {
     back: "Kembali",
     continue: "Lanjutkan",
     skipSetup: "Lewati penyiapan",
-    outsideAgain: "Klik di luar sekali lagi untuk menutup",
     getStarted: "Mulai",
     progress: "Langkah {current} dari {total}",
     welcome: {

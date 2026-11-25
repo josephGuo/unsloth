@@ -882,10 +882,17 @@ export const zhCN = {
   chatMenu: {
     more: "聊天选项",
     copy: "复制",
-    addScheduledTask: "添加定时任务…",
+    addScheduledTask: "添加定时任务",
     compact: "压缩对话",
     compactEmpty: "暂无可压缩的内容",
     compactUnsupported: "对话压缩需要支持工具调用的 GGUF 或 MLX 模型",
+  },
+  chatFiles: {
+    title: "此聊天中的文件",
+    code: "代码片段",
+    showInChat: "在聊天中显示",
+    download: "下载 {name}",
+    saveFailed: "无法保存 {name}。",
   },
   welcome: {
     goodToSeeYou: "很高兴见到你",
@@ -964,6 +971,7 @@ export const zhCN = {
     saving: "保存中...",
     search: "搜索",
     shutdown: "关闭服务",
+    technicalDetails: "技术详情",
   },
   shell: {
     helpMenu: {
@@ -4931,6 +4939,7 @@ export const zhCN = {
     model: {
       label: "翻译模型",
       fast: "快速",
+      balanced: "均衡",
       quality: "最佳质量",
       chat: "聊天模型",
       recommended: "推荐",
@@ -4952,11 +4961,11 @@ export const zhCN = {
       toneFormal: "正式",
       toneCasual: "随意",
       auto: "边输入边翻译",
-      autoDescription: "模型加载后开始。输入文字不会触发下载。",
+      autoDescription: "模型加载后自动开始。",
       saveHistory: "保存历史记录",
       saveHistoryDescription: "仅保存在此浏览器中。",
       showPrompt: "显示提示词",
-      showPromptDescription: "查看发送给模型的完整指令。",
+      showPromptDescription: "查看发送给模型的确切指令。",
     },
     history: {
       title: "历史记录",
@@ -6018,7 +6027,6 @@ export const zhCN = {
     back: "返回",
     continue: "继续",
     skipSetup: "跳过设置",
-    outsideAgain: "再次点击外部即可关闭",
     getStarted: "开始使用",
     progress: "第 {current} 步，共 {total} 步",
     welcome: {

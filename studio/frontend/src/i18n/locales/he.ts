@@ -920,10 +920,17 @@ export const he = {
   chatMenu: {
     more: "אפשרויות צ'אט",
     copy: "העתקה",
-    addScheduledTask: "הוספת משימה מתוזמנת…",
+    addScheduledTask: "הוספת משימה מתוזמנת",
     compact: "כווץ שיחה",
     compactEmpty: "אין עדיין מה לכווץ",
     compactUnsupported: "כיווץ שיחה דורש מודל GGUF או MLX עם תמיכה בכלים",
+  },
+  chatFiles: {
+    title: "קבצים בצ׳אט הזה",
+    code: "קטעי קוד",
+    showInChat: "הצג בצ׳אט",
+    download: "הורדת {name}",
+    saveFailed: "לא ניתן היה לשמור את {name}.",
   },
   welcome: {
     goodToSeeYou: "טוב לראות אותך",
@@ -1003,6 +1010,7 @@ export const he = {
     saving: "שומר...",
     search: "חיפוש",
     shutdown: "כיבוי",
+    technicalDetails: "פרטים טכניים",
   },
   shell: {
     helpMenu: {
@@ -5113,6 +5121,7 @@ export const he = {
     model: {
       label: "מודל תרגום",
       fast: "מהיר",
+      balanced: "מאוזן",
       quality: "האיכות הטובה ביותר",
       chat: "מודל צ'אט",
       recommended: "מומלצים",
@@ -5134,11 +5143,11 @@ export const he = {
       toneFormal: "רשמי",
       toneCasual: "יומיומי",
       auto: "תרגום תוך כדי הקלדה",
-      autoDescription: "מתחיל לאחר שהמודל נטען. הקלדה לעולם לא מתחילה הורדה.",
+      autoDescription: "מתחיל אוטומטית כשהמודל נטען.",
       saveHistory: "שמירת היסטוריה",
       saveHistoryDescription: "נשמרת בדפדפן הזה בלבד.",
       showPrompt: "הצג פרומפט",
-      showPromptDescription: "הצג את ההוראות המדויקות שנשלחות למודל.",
+      showPromptDescription: "הצגת ההוראות המדויקות שנשלחות למודל.",
     },
     history: {
       title: "היסטוריה",
@@ -6217,7 +6226,6 @@ export const he = {
     back: "חזרה",
     continue: "המשך",
     skipSetup: "דילוג על ההגדרה",
-    outsideAgain: "יש ללחוץ שוב מחוץ לחלון כדי לסגור",
     getStarted: "מתחילים",
     progress: "שלב {current} מתוך {total}",
     welcome: {

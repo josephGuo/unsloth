@@ -985,11 +985,18 @@ export const uk = {
   chatMenu: {
     more: "Параметри чату",
     copy: "Копіювати",
-    addScheduledTask: "Додати заплановане завдання…",
+    addScheduledTask: "Додати заплановане завдання",
     compact: "Стиснути розмову",
     compactEmpty: "Поки що нічого стискати",
     compactUnsupported:
       "Для стиснення потрібна модель GGUF або MLX з підтримкою інструментів",
+  },
+  chatFiles: {
+    title: "Файли в цьому чаті",
+    code: "Фрагменти коду",
+    showInChat: "Показати в чаті",
+    download: "Завантажити {name}",
+    saveFailed: "Не вдалося зберегти {name}.",
   },
   welcome: {
     goodToSeeYou: "Радий вас бачити",
@@ -1075,6 +1082,7 @@ export const uk = {
     saving: "Збереження...",
     search: "Пошук",
     shutdown: "Вимкнути",
+    technicalDetails: "Технічні відомості",
   },
   shell: {
     helpMenu: {
@@ -5412,6 +5420,7 @@ export const uk = {
     model: {
       label: "Модель перекладу",
       fast: "Швидка",
+      balanced: "Збалансована",
       quality: "Найкраща якість",
       chat: "Модель чату",
       recommended: "Рекомендовані",
@@ -5433,11 +5442,11 @@ export const uk = {
       toneFormal: "Офіційний",
       toneCasual: "Невимушений",
       auto: "Перекладати під час введення",
-      autoDescription: "Починається, щойно модель завантажено. Введення тексту ніколи не запускає завантаження.",
+      autoDescription: "Запускається автоматично, коли модель завантажено.",
       saveHistory: "Зберігати історію",
       saveHistoryDescription: "Зберігається лише в цьому браузері.",
       showPrompt: "Показувати промпт",
-      showPromptDescription: "Перегляньте точні інструкції, надіслані моделі.",
+      showPromptDescription: "Переглянути точні інструкції, надіслані моделі.",
     },
     history: {
       title: "Історія",
@@ -6570,7 +6579,6 @@ export const uk = {
     back: "Назад",
     continue: "Далі",
     skipSetup: "Пропустити налаштування",
-    outsideAgain: "Клацніть ззовні ще раз, щоб закрити",
     getStarted: "Почати",
     progress: "Крок {current} з {total}",
     welcome: {

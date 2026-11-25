@@ -846,6 +846,7 @@ export const it = {
     saving: "Salvataggio...",
     search: "Cerca",
     shutdown: "Arresta",
+    technicalDetails: "Dettagli tecnici",
   },
   shell: {
     helpMenu: {
@@ -4017,10 +4018,17 @@ export const it = {
   chatMenu: {
     more: "Opzioni chat",
     copy: "Copia",
-    addScheduledTask: "Aggiungi attività pianificata…",
+    addScheduledTask: "Aggiungi attività pianificata",
     compact: "Compatta conversazione",
     compactEmpty: "Ancora niente da compattare",
     compactUnsupported: "La compattazione richiede un modello GGUF o MLX con supporto per gli strumenti",
+  },
+  chatFiles: {
+    title: "File in questa chat",
+    code: "Frammenti di codice",
+    showInChat: "Mostra nella chat",
+    download: "Scarica {name}",
+    saveFailed: "Impossibile salvare {name}.",
   },
   welcome: {
     goodToSeeYou: "Che piacere vederti",
@@ -5100,6 +5108,7 @@ export const it = {
     model: {
       label: "Modello di traduzione",
       fast: "Veloce",
+      balanced: "Bilanciato",
       quality: "Qualità migliore",
       chat: "Modello di chat",
       recommended: "Consigliati",
@@ -5121,11 +5130,11 @@ export const it = {
       toneFormal: "Formale",
       toneCasual: "Informale",
       auto: "Traduci mentre scrivi",
-      autoDescription: "Si avvia quando il modello è caricato. La digitazione non avvia mai un download.",
+      autoDescription: "Si avvia automaticamente quando il modello è caricato.",
       saveHistory: "Salva cronologia",
       saveHistoryDescription: "Conservata solo in questo browser.",
       showPrompt: "Mostra prompt",
-      showPromptDescription: "Visualizza le istruzioni esatte inviate al modello.",
+      showPromptDescription: "Vedi le istruzioni esatte inviate al modello.",
     },
     history: {
       title: "Cronologia",
@@ -6187,7 +6196,6 @@ export const it = {
     back: "Indietro",
     continue: "Continua",
     skipSetup: "Salta configurazione",
-    outsideAgain: "Fai di nuovo clic all'esterno per chiudere",
     getStarted: "Inizia",
     progress: "Passo {current} di {total}",
     welcome: {
