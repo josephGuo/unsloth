@@ -246,6 +246,7 @@ from ..kernels import (
 from ..kernels.bnb_override import install_bnb_nf4_override as _install_bnb_nf4_override
 from ..kernels.rope_embedding import register_split_model
 from ._cache_kwarg import get_cache_kwarg
+from ._lora_scale_warning import warn_low_rank_lora_alpha
 from ._utils import (
     __version__,
     importlib_version,
@@ -1360,6 +1361,8 @@ VLLM_SUPPORTED_VLM = [
     "gemma4_unified_text",
     "muse_glimmer",
     "muse_glimmer_text",
+    # Qwen3.8-Flash-Next: GDN + QSA + hyper-connections + PLE; the zoo shares it via vllm_qwen4_exp
+    "qwen4_exp",
 ]
 
 
@@ -1465,6 +1468,15 @@ def _fp8_moe_fast_inference_refusal(config):
     ):
         return None
     return "this unsloth_zoo cannot share FP8 MoE experts with vLLM (upgrade unsloth_zoo)"
+
+
+def _zoo_supports_qwen4_exp_fast_inference():
+    # Older unsloth_zoo cannot map vLLM's hyper-connection, PLE and QSA weights onto the training model.
+    try:
+        from unsloth_zoo.vllm_qwen4_exp import is_qwen4_exp_config  # noqa: F401
+        return True
+    except Exception:
+        return False
 
 
 def _zoo_supports_moe_fast_inference():
@@ -4306,6 +4318,16 @@ class FastBaseModel:
                 "Please run `pip install --upgrade unsloth_zoo`."
             )
 
+        if (
+            fast_inference
+            and "qwen4_exp" in model_types
+            and not _zoo_supports_qwen4_exp_fast_inference()
+        ):
+            raise RuntimeError(
+                "Unsloth: qwen4_exp fast_inference needs a newer unsloth_zoo. "
+                "Please run `pip install --upgrade unsloth_zoo`, or set fast_inference = False."
+            )
+
         if any(arch in VLLM_NON_LORA_VLM for arch in model_types):
             # mllama is still only in vllm v0, and vLLM V0 does not support LoRA on multimodal models. TODO: revisit once vLLM V1 supports Llama 3.2 (mllama).
             vllm_enable_lora = False
@@ -5272,7 +5294,11 @@ class FastBaseModel:
         if _modelopt_rewritten:
             keep_fp8_scale_names_on_save(model)
 
-        if os.environ.get("UNSLOTH_HIGH_PRECISION_LAYERNORM", "0") == "1":
+        # Qwen4Exp under fast_inference: its norms are views of vLLM's bf16 weights and already compute in float32
+        # ((1 + weight.float())); a float32 copy would stop sharing them with the rollout engine.
+        if os.environ.get("UNSLOTH_HIGH_PRECISION_LAYERNORM", "0") == "1" and not (
+            fast_inference and "qwen4_exp" in model_types
+        ):
             for jj, (name, module) in enumerate(model.named_modules()):
                 if (
                     name.endswith(("norm", "norm1", "norm2", "norm3", "norm4"))
@@ -5777,6 +5803,7 @@ class FastBaseModel:
             skip_checkpointing(model, checkpoint_skip_layers)
             return model
         transformers_set_seed(random_state)
+        warn_low_rank_lora_alpha(r, lora_alpha, use_rslora)
 
         # Remember whether the CALLER explicitly opted into audio: "all-linear" turns the flag on implicitly below, but an old unsloth_zoo without audio must not fail a plain all-linear run.
         _audio_explicitly_requested = bool(finetune_audio_layers)
