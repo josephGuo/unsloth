@@ -2813,7 +2813,7 @@ class _PerDeviceRopeCache:
         with self._rope_build_mode():
             self._set_cos_sin_cache(
                 seq_len = self._rope_cache_rows(),
-                device = torch.device(device_index),
+                device = torch.device(DEVICE_TYPE_TORCH, device_index),
                 dtype = self._rope_cache_dtype,
             )
         self.current_rope_size = current_rope_size
@@ -3263,7 +3263,7 @@ class LongRopeRotaryEmbedding(_PerDeviceRopeCache, torch.nn.Module):
             self._short_rope_rebuild_for_grad[device_index] and torch.is_grad_enabled()
         )
         if self.multi_gpu_short_cos_cached[device_index] is None or short_rebuild_for_grad:
-            device = torch.device(device_index)
+            device = torch.device(DEVICE_TYPE_TORCH, device_index)
             with self._rope_build_mode():
                 self.multi_gpu_short_cos_cached[device_index] = self._unsloth_short_cos_cpu.to(
                     device = device, non_blocking = True
@@ -4862,6 +4862,9 @@ class FastLlamaModel:
                 model = convert_vllm_to_huggingface(
                     quant_state_dict, model_config, dtype, bnb_config
                 )
+                if getattr(model, "_unsloth_vllm_nvfp4_layers", 0):
+                    # NVFP4 layers hold vLLM's kept compressed-tensors tensors: run them W4A16 like a plain load.
+                    _prepare_compressed_tensors_model(model)
                 # The rebuilt model takes the checkpoint's config, so put the caller's RoPE back for saving.
                 if rope_scaling is not None:
                     assign_rope_scaling(model.config, rope_scaling)
