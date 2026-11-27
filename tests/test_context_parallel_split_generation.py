@@ -247,13 +247,15 @@ def _share_trainer(**attrs):
     [
         ({}, ["p"] * 16, (), slice(8, 16)),
         ({}, ["p"] * 4, (), None),  # one group cannot be split over two peers
-        ({}, ["p"] * 8, (), None),  # one group per peer: unmasked decode, kept on the root
+        ({}, ["p"] * 8, (), slice(4, 8)),  # one group per peer
         ({}, ["p"] * 24, (), slice(12, 24)),  # 3 groups per peer
         ({}, ["p"] * 14, (), None),  # not whole groups
         ({}, ["p"] * 16, (["img"] * 16,), None),  # TRL 0.24 images
         ({}, ["p"] * 16, (None,), slice(8, 16)),
         ({"rollout_func": lambda *a: None}, ["p"] * 16, (), None),
         ({"environment_factories": [object]}, ["p"] * 16, (), None),
+        ({"environments": [object()] * 16}, ["p"] * 16, (), None),  # TRL 1.0 - 1.9
+        ({"environments": None, "environment_factories": None}, ["p"] * 16, (), slice(8, 16)),
         ({"is_deepspeed_enabled": True}, ["p"] * 16, (), None),
         (
             {
